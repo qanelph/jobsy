@@ -8,12 +8,12 @@ interface AgentsState {
   error: string | null
 
   fetchAgents: () => Promise<void>
-  getAgent: (id: string) => Promise<Agent | null>
+  getAgent: (id: number) => Promise<Agent | null>
   createAgent: (data: CreateAgentRequest) => Promise<Agent>
-  updateAgent: (id: string, data: UpdateAgentRequest) => Promise<Agent>
-  deleteAgent: (id: string) => Promise<void>
-  startAgent: (id: string) => Promise<void>
-  stopAgent: (id: string) => Promise<void>
+  updateAgent: (id: number, data: UpdateAgentRequest) => Promise<Agent>
+  deleteAgent: (id: number) => Promise<void>
+  startAgent: (id: number) => Promise<void>
+  stopAgent: (id: number) => Promise<void>
 }
 
 export const useAgentsStore = create<AgentsState>((set, get) => ({
@@ -23,34 +23,48 @@ export const useAgentsStore = create<AgentsState>((set, get) => ({
 
   fetchAgents: async () => {
     set({ loading: true, error: null })
-    const agents = await apiClient.getAgents()
-    set({ agents, loading: false })
+    try {
+      const agents = await apiClient.getAgents()
+      set({ agents, loading: false })
+    } catch {
+      set({ loading: false, error: 'Не удалось загрузить агентов' })
+    }
   },
 
-  getAgent: async (id: string) => {
+  getAgent: async (id: number) => {
     const cached = get().agents.find(a => a.id === id)
     if (cached) return cached
 
     set({ loading: true, error: null })
-    const agent = await apiClient.getAgent(id)
-    set(state => ({
-      agents: [...state.agents.filter(a => a.id !== id), agent],
-      loading: false,
-    }))
-    return agent
+    try {
+      const agent = await apiClient.getAgent(id)
+      set(state => ({
+        agents: [...state.agents.filter(a => a.id !== id), agent],
+        loading: false,
+      }))
+      return agent
+    } catch {
+      set({ loading: false, error: 'Не удалось загрузить агента' })
+      return null
+    }
   },
 
   createAgent: async (data: CreateAgentRequest) => {
     set({ loading: true, error: null })
-    const agent = await apiClient.createAgent(data)
-    set(state => ({
-      agents: [...state.agents, agent],
-      loading: false,
-    }))
-    return agent
+    try {
+      const agent = await apiClient.createAgent(data)
+      set(state => ({
+        agents: [...state.agents, agent],
+        loading: false,
+      }))
+      return agent
+    } catch {
+      set({ loading: false, error: 'Не удалось создать агента' })
+      throw new Error('Не удалось создать агента')
+    }
   },
 
-  updateAgent: async (id: string, data: UpdateAgentRequest) => {
+  updateAgent: async (id: number, data: UpdateAgentRequest) => {
     set({ loading: true, error: null })
     const agent = await apiClient.updateAgent(id, data)
     set(state => ({
@@ -60,7 +74,7 @@ export const useAgentsStore = create<AgentsState>((set, get) => ({
     return agent
   },
 
-  deleteAgent: async (id: string) => {
+  deleteAgent: async (id: number) => {
     set({ loading: true, error: null })
     await apiClient.deleteAgent(id)
     set(state => ({
@@ -69,7 +83,7 @@ export const useAgentsStore = create<AgentsState>((set, get) => ({
     }))
   },
 
-  startAgent: async (id: string) => {
+  startAgent: async (id: number) => {
     set({ loading: true, error: null })
     const agent = await apiClient.startAgent(id)
     set(state => ({
@@ -78,7 +92,7 @@ export const useAgentsStore = create<AgentsState>((set, get) => ({
     }))
   },
 
-  stopAgent: async (id: string) => {
+  stopAgent: async (id: number) => {
     set({ loading: true, error: null })
     const agent = await apiClient.stopAgent(id)
     set(state => ({

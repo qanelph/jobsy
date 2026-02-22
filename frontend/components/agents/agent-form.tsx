@@ -1,11 +1,12 @@
 'use client'
 
 import { useState } from 'react'
+import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import type { CreateAgentRequest } from '@/types/agent'
 
 interface AgentFormProps {
@@ -15,16 +16,9 @@ interface AgentFormProps {
 
 export function AgentForm({ onSubmit, loading }: AgentFormProps) {
   const [formData, setFormData] = useState<CreateAgentRequest>({
+    name: '',
     telegram_user_id: 0,
-    username: '',
-    first_name: '',
-    last_name: '',
-    config: {
-      model: 'claude-sonnet-4-5-20250929',
-      temperature: 0.7,
-      max_tokens: 4096,
-      system_prompt: '',
-    },
+    custom_instructions: '',
   })
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -33,126 +27,109 @@ export function AgentForm({ onSubmit, loading }: AgentFormProps) {
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Создать нового агента</CardTitle>
-        <CardDescription>Заполните данные для создания AI агента</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="telegram_user_id">Telegram User ID *</Label>
-              <Input
-                id="telegram_user_id"
-                type="number"
-                required
-                value={formData.telegram_user_id || ''}
-                onChange={(e) => setFormData({ ...formData, telegram_user_id: parseInt(e.target.value) })}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="username">Username *</Label>
-              <Input
-                id="username"
-                required
-                value={formData.username}
-                onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-              />
-            </div>
+    <form onSubmit={handleSubmit} className="space-y-4">
+      {/* Основное */}
+      <Card>
+        <CardHeader className="pb-4">
+          <CardTitle className="text-base">Основное</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="name">Имя агента *</Label>
+            <Input
+              id="name"
+              required
+              value={formData.name}
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              placeholder="Мой AI-ассистент"
+            />
           </div>
+        </CardContent>
+      </Card>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="first_name">Имя</Label>
-              <Input
-                id="first_name"
-                value={formData.first_name}
-                onChange={(e) => setFormData({ ...formData, first_name: e.target.value })}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="last_name">Фамилия</Label>
-              <Input
-                id="last_name"
-                value={formData.last_name}
-                onChange={(e) => setFormData({ ...formData, last_name: e.target.value })}
-              />
-            </div>
+      {/* Telegram */}
+      <Card>
+        <CardHeader className="pb-4">
+          <CardTitle className="text-base">Telegram</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="telegram_user_id">User ID *</Label>
+            <Input
+              id="telegram_user_id"
+              type="number"
+              required
+              value={formData.telegram_user_id || ''}
+              onChange={(e) => setFormData({ ...formData, telegram_user_id: parseInt(e.target.value) || 0 })}
+              placeholder="123456789"
+            />
+            <p className="text-xs text-muted-foreground">
+              Отправьте /start боту @userinfobot в Telegram чтобы узнать свой ID
+            </p>
           </div>
-
-          <div className="border-t pt-4">
-            <h3 className="text-sm font-semibold mb-4">Конфигурация</h3>
-
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="model">Модель</Label>
-                <Input
-                  id="model"
-                  value={formData.config?.model}
-                  onChange={(e) => setFormData({
-                    ...formData,
-                    config: { ...formData.config, model: e.target.value }
-                  })}
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="temperature">Temperature</Label>
-                  <Input
-                    id="temperature"
-                    type="number"
-                    step="0.1"
-                    min="0"
-                    max="1"
-                    value={formData.config?.temperature}
-                    onChange={(e) => setFormData({
-                      ...formData,
-                      config: { ...formData.config, temperature: parseFloat(e.target.value) }
-                    })}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="max_tokens">Max Tokens</Label>
-                  <Input
-                    id="max_tokens"
-                    type="number"
-                    value={formData.config?.max_tokens}
-                    onChange={(e) => setFormData({
-                      ...formData,
-                      config: { ...formData.config, max_tokens: parseInt(e.target.value) }
-                    })}
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="system_prompt">System Prompt</Label>
-                <Textarea
-                  id="system_prompt"
-                  rows={4}
-                  placeholder="Необязательный системный промпт для агента..."
-                  value={formData.config?.system_prompt}
-                  onChange={(e) => setFormData({
-                    ...formData,
-                    config: { ...formData.config, system_prompt: e.target.value }
-                  })}
-                />
-              </div>
-            </div>
+          <div className="space-y-2">
+            <Label htmlFor="telegram_bot_token">Bot Token *</Label>
+            <Input
+              id="telegram_bot_token"
+              type="password"
+              required
+              value={formData.telegram_bot_token || ''}
+              onChange={(e) => setFormData({ ...formData, telegram_bot_token: e.target.value || undefined })}
+              placeholder="123456:ABC-DEF..."
+            />
+            <p className="text-xs text-muted-foreground">
+              Получите у @BotFather в Telegram
+            </p>
           </div>
+        </CardContent>
+      </Card>
 
-          <div className="flex justify-end gap-2 pt-4">
-            <Button type="submit" disabled={loading}>
-              {loading ? 'Создание...' : 'Создать агента'}
-            </Button>
+      {/* Конфигурация */}
+      <Card>
+        <CardHeader className="pb-4">
+          <CardTitle className="text-base">Конфигурация</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="claude_api_key">Claude API Key *</Label>
+            <Input
+              id="claude_api_key"
+              type="password"
+              required
+              value={formData.claude_api_key || ''}
+              onChange={(e) => setFormData({ ...formData, claude_api_key: e.target.value || undefined })}
+              placeholder="sk-ant-..."
+            />
+            <p className="text-xs text-muted-foreground">
+              API ключ для Claude (Anthropic)
+            </p>
           </div>
-        </form>
-      </CardContent>
-    </Card>
+          <div className="space-y-2">
+            <Label htmlFor="custom_instructions">Инструкции для агента</Label>
+            <Textarea
+              id="custom_instructions"
+              rows={5}
+              placeholder="Необязательные кастомные инструкции для агента..."
+              className="font-mono text-xs"
+              value={formData.custom_instructions || ''}
+              onChange={(e) => setFormData({ ...formData, custom_instructions: e.target.value || undefined })}
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="flex justify-end pt-2">
+        <Button type="submit" disabled={loading}>
+          {loading ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Создание...
+            </>
+          ) : (
+            'Создать агента'
+          )}
+        </Button>
+      </div>
+    </form>
   )
 }

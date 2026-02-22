@@ -20,17 +20,22 @@ class CredentialDistributor:
         self.docker = docker_client
 
     def build_credentials_json(self, credential: ClaudeCredential) -> dict:
-        """Формирует содержимое .credentials.json для записи в контейнер."""
+        """Формирует содержимое .credentials.json для записи в контейнер.
+
+        Claude Code ожидает обёртку claudeAiOauth вокруг токенов.
+        """
         return {
-            "accessToken": credential.access_token,
-            "refreshToken": credential.refresh_token,
-            "expiresAt": credential.expires_at,
-            "scopes": [
-                "user:profile",
-                "user:inference",
-                "user:sessions:claude_code",
-                "user:mcp_servers",
-            ],
+            "claudeAiOauth": {
+                "accessToken": credential.access_token,
+                "refreshToken": credential.refresh_token,
+                "expiresAt": credential.expires_at,
+                "scopes": [
+                    "user:profile",
+                    "user:inference",
+                    "user:sessions:claude_code",
+                    "user:mcp_servers",
+                ],
+            }
         }
 
     def write_credentials_to_container(self, container_id: str, credentials: dict) -> bool:

@@ -5,7 +5,7 @@ import './globals.css'
 const inter = Inter({ subsets: ['latin', 'cyrillic'] })
 
 export const metadata: Metadata = {
-  title: 'PHL Jobsy - AI Agents Management',
+  title: 'Jobsy — AI Agents',
   description: 'Управление AI агентами с Telegram интеграцией',
 }
 
@@ -17,9 +17,7 @@ export default function RootLayout({
   return (
     <html lang="ru">
       <body className={inter.className}>
-        <div className="min-h-screen bg-background">
-          {children}
-        </div>
+        {children}
       </body>
     </html>
   )

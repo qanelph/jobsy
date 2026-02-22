@@ -26,8 +26,7 @@ class AgentSpawner:
         3. Agent container
         4. Claude credentials (OAuth или API key)
         """
-        if not agent.telegram_bot_token:
-            raise ValueError("telegram_bot_token обязателен для создания агента")
+        # telegram_bot_token опционален — агент может работать только через WebSocket
 
         # Определяем credentials: глобальные OAuth/API key или per-agent
         global_api_key, credentials_json = await self.auth_manager.get_agent_credentials(db)
@@ -60,6 +59,7 @@ class AgentSpawner:
             network_name=network_name,
             telegram_bot_token=agent.telegram_bot_token,
             telegram_user_id=agent.telegram_user_id,
+            port=port,
             claude_api_key=container_api_key,
             custom_instructions=agent.custom_instructions,
         )

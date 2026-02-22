@@ -2,6 +2,8 @@
 
 import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { motion } from 'framer-motion'
+import { Loader2 } from 'lucide-react'
 import { authStorage } from '@/lib/auth'
 
 export default function HomePage() {
@@ -17,9 +19,13 @@ export default function HomePage() {
 
   return (
     <div className="flex items-center justify-center min-h-screen">
-      <div className="text-center">
-        <h1 className="text-2xl font-bold">Загрузка...</h1>
-      </div>
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        className="text-center"
+      >
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground mx-auto" />
+      </motion.div>
     </div>
   )
 }

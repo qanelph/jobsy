@@ -51,11 +51,39 @@ const config: Config = {
           DEFAULT: 'hsl(var(--card))',
           foreground: 'hsl(var(--card-foreground))',
         },
+        'accent-blue': 'hsl(var(--accent-blue))',
+        'accent-green': 'hsl(var(--accent-green))',
+        'accent-amber': 'hsl(var(--accent-amber))',
+        'accent-red': 'hsl(var(--accent-red))',
       },
       borderRadius: {
         lg: 'var(--radius)',
         md: 'calc(var(--radius) - 2px)',
         sm: 'calc(var(--radius) - 4px)',
+        xl: 'calc(var(--radius) + 4px)',
+        '2xl': '16px',
+      },
+      backdropBlur: {
+        glass: '20px',
+      },
+      keyframes: {
+        'fade-in-up': {
+          '0%': { opacity: '0', transform: 'translateY(10px)' },
+          '100%': { opacity: '1', transform: 'translateY(0)' },
+        },
+        'status-pulse': {
+          '0%, 100%': { transform: 'scale(1)' },
+          '50%': { transform: 'scale(1.05)' },
+        },
+        'dot-pulse': {
+          '0%, 100%': { opacity: '1' },
+          '50%': { opacity: '0.4' },
+        },
+      },
+      animation: {
+        'fade-in-up': 'fade-in-up 0.3s ease-out',
+        'status-pulse': 'status-pulse 0.2s ease-in-out',
+        'dot-pulse': 'dot-pulse 2s ease-in-out infinite',
       },
     },
   },

@@ -64,8 +64,9 @@ class DockerClient:
         self,
         agent_id: int,
         network_name: str,
-        telegram_bot_token: str,
+        telegram_bot_token: Optional[str],
         telegram_user_id: int,
+        port: int,
         claude_api_key: Optional[str] = None,
         custom_instructions: Optional[str] = None,
     ) -> Container:
@@ -73,15 +74,23 @@ class DockerClient:
         container_name = f"jobs-agent-{agent_id}"
 
         environment: dict[str, str] = {
-            "TG_BOT_TOKEN": telegram_bot_token,
             "TG_USER_ID": str(telegram_user_id),
-            "TG_API_ID": str(settings.tg_api_id),
-            "TG_API_HASH": settings.tg_api_hash,
             "OPENAI_API_KEY": settings.openai_api_key,
             "HTTP_PROXY": settings.http_proxy,
             "TZ": settings.timezone,
             "BROWSER_CDP_URL": "http://browser:9223",
+            "JWT_SECRET_KEY": settings.jwt_secret_key,
+            "SKIP_SETUP": "1",
         }
+
+        # Bot API (aiogram) — только токен
+        if telegram_bot_token:
+            environment["TG_BOT_TOKEN"] = telegram_bot_token
+
+        # Telethon — API credentials
+        if settings.tg_api_id and settings.tg_api_hash:
+            environment["TG_API_ID"] = str(settings.tg_api_id)
+            environment["TG_API_HASH"] = settings.tg_api_hash
 
         if claude_api_key:
             environment["ANTHROPIC_API_KEY"] = claude_api_key
@@ -101,6 +110,7 @@ class DockerClient:
             network=network_name,
             environment=environment,
             volumes=volumes,
+            ports={"8080/tcp": port},
             detach=True,
             restart_policy={"Name": "unless-stopped"},
         )

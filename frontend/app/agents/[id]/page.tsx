@@ -18,12 +18,13 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
 import { AgentStatusBadge } from '@/components/agents/agent-status-badge'
+import { AgentChat } from '@/components/chat/agent-chat'
 import { AppLayout } from '@/components/layout/app-layout'
 import { useAgentsStore } from '@/store/agents'
 import { cn, formatDate } from '@/lib/utils'
 import type { Agent } from '@/types/agent'
 
-type Tab = 'overview' | 'logs' | 'settings'
+type Tab = 'overview' | 'logs' | 'settings' | 'chat'
 
 export default function AgentDetailPage() {
   const router = useRouter()
@@ -77,6 +78,7 @@ export default function AgentDetailPage() {
 
   const tabs: { id: Tab; label: string }[] = [
     { id: 'overview', label: 'Обзор' },
+    { id: 'chat', label: 'Чат' },
     { id: 'logs', label: 'Логи' },
     { id: 'settings', label: 'Настройки' },
   ]
@@ -261,6 +263,10 @@ export default function AgentDetailPage() {
                 </Card>
               )}
             </div>
+          )}
+
+          {activeTab === 'chat' && (
+            <AgentChat agent={agent} />
           )}
 
           {activeTab === 'logs' && (
