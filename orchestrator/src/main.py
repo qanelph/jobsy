@@ -1,3 +1,4 @@
+import asyncio
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
@@ -7,13 +8,17 @@ from fastapi.middleware.cors import CORSMiddleware
 from .database import init_db
 from .agents.routes import router as agents_router
 from .auth.routes import router as auth_router
+from .claude_auth.routes import router as claude_auth_router
+from .claude_auth.background import token_refresh_loop
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Инициализация приложения при старте"""
     await init_db()
+    refresh_task = asyncio.create_task(token_refresh_loop())
     yield
+    refresh_task.cancel()
 
 
 app = FastAPI(
@@ -35,6 +40,7 @@ app.add_middleware(
 # Роуты
 app.include_router(auth_router)
 app.include_router(agents_router)
+app.include_router(claude_auth_router)
 
 
 @app.get("/health")

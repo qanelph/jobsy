@@ -1,9 +1,14 @@
+import logging
 from typing import Optional
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from .models import Agent, AgentStatus
+from ..claude_auth.manager import ClaudeAuthManager
 from ..utils.docker_client import DockerClient
 from ..utils.port_manager import PortManager
+
+logger = logging.getLogger(__name__)
 
 
 class AgentSpawner:
@@ -11,6 +16,7 @@ class AgentSpawner:
 
     def __init__(self) -> None:
         self.docker_client = DockerClient()
+        self.auth_manager = ClaudeAuthManager()
 
     async def spawn(self, agent: Agent, db: AsyncSession) -> None:
         """
@@ -18,11 +24,19 @@ class AgentSpawner:
         1. Docker network
         2. Browser sidecar
         3. Agent container
+        4. Claude credentials (OAuth или API key)
         """
         if not agent.telegram_bot_token:
             raise ValueError("telegram_bot_token обязателен для создания агента")
-        if not agent.claude_api_key:
-            raise ValueError("claude_api_key обязателен для создания агента")
+
+        # Определяем credentials: глобальные OAuth/API key или per-agent
+        global_api_key, credentials_json = await self.auth_manager.get_agent_credentials(db)
+        agent_api_key = global_api_key or agent.claude_api_key
+
+        if not agent_api_key and not credentials_json:
+            raise ValueError(
+                "Не настроена авторизация Claude: нет ни OAuth, ни глобального API key, ни per-agent ключа"
+            )
 
         # Выделяем порт
         port = await PortManager.allocate_port(db)
@@ -39,16 +53,24 @@ class AgentSpawner:
         )
         agent.browser_container_id = browser_container.id
 
-        # 3. Создаём agent container
+        # 3. Создаём agent container (без ANTHROPIC_API_KEY если OAuth)
+        container_api_key = agent_api_key if not credentials_json else None
         agent_container = self.docker_client.create_agent_container(
             agent_id=agent.id,
             network_name=network_name,
             telegram_bot_token=agent.telegram_bot_token,
-            claude_api_key=agent.claude_api_key,
             telegram_user_id=agent.telegram_user_id,
+            claude_api_key=container_api_key,
             custom_instructions=agent.custom_instructions,
         )
         agent.container_id = agent_container.id
+
+        # 4. Если OAuth — записать .credentials.json в контейнер
+        if credentials_json:
+            self.docker_client.write_credentials_to_container(
+                agent_container.id, credentials_json
+            )
+            logger.info("Written OAuth credentials to agent %s", agent.id)
 
         agent.status = AgentStatus.RUNNING
         await db.commit()

@@ -1,3 +1,7 @@
+import io
+import json
+import tarfile
+
 import docker
 from docker.models.containers import Container
 from docker.models.networks import Network
@@ -61,8 +65,8 @@ class DockerClient:
         agent_id: int,
         network_name: str,
         telegram_bot_token: str,
-        claude_api_key: str,
         telegram_user_id: int,
+        claude_api_key: Optional[str] = None,
         custom_instructions: Optional[str] = None,
     ) -> Container:
         """Создать и запустить контейнер агента с правильными env vars и volumes"""
@@ -70,7 +74,6 @@ class DockerClient:
 
         environment: dict[str, str] = {
             "TG_BOT_TOKEN": telegram_bot_token,
-            "ANTHROPIC_API_KEY": claude_api_key,
             "TG_USER_ID": str(telegram_user_id),
             "TG_API_ID": str(settings.tg_api_id),
             "TG_API_HASH": settings.tg_api_hash,
@@ -79,6 +82,9 @@ class DockerClient:
             "TZ": settings.timezone,
             "BROWSER_CDP_URL": "http://browser:9223",
         }
+
+        if claude_api_key:
+            environment["ANTHROPIC_API_KEY"] = claude_api_key
 
         if custom_instructions:
             environment["CUSTOM_INSTRUCTIONS"] = custom_instructions
@@ -135,3 +141,22 @@ class DockerClient:
             container.reload()
             return container.status
         return None
+
+    def write_credentials_to_container(self, container_id: str, credentials: dict) -> bool:
+        """Записать .credentials.json в контейнер через put_archive"""
+        container = self.get_container(container_id)
+        if not container:
+            return False
+
+        content = json.dumps(credentials, indent=2).encode("utf-8")
+        tar_buf = io.BytesIO()
+        with tarfile.open(fileobj=tar_buf, mode="w") as tar:
+            info = tarfile.TarInfo(name=".credentials.json")
+            info.size = len(content)
+            info.uid = 1000  # jobs user
+            info.gid = 1000
+            tar.addfile(info, io.BytesIO(content))
+        tar_buf.seek(0)
+
+        container.put_archive("/home/jobs/.claude", tar_buf)
+        return True
