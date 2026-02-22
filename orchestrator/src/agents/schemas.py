@@ -30,6 +30,7 @@ class AgentResponse(BaseModel):
     telegram_user_id: int
     status: AgentStatus
     container_id: Optional[str]
+    browser_container_id: Optional[str]
     port: Optional[int]
     custom_instructions: Optional[str]
     total_sessions: int

@@ -18,7 +18,17 @@ class Settings(BaseSettings):
 
     # Docker
     docker_base_url: str = "unix:///var/run/docker.sock"
-    agent_image: str = "phl-jobs-agent:latest"
+    agent_image: str = "jobs-agent:latest"
+    browser_image: str = "jobs-browser:latest"
+
+    # Shared Telegram (Telethon)
+    tg_api_id: int = 0
+    tg_api_hash: str = ""
+
+    # Shared keys
+    openai_api_key: str = ""
+    http_proxy: str = ""
+    timezone: str = "Europe/Moscow"
 
     # Kubernetes
     use_kubernetes: bool = False

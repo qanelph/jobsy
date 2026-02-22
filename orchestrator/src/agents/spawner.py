@@ -7,20 +7,18 @@ from ..utils.port_manager import PortManager
 
 
 class AgentSpawner:
-    """Создание и управление Docker контейнерами агентов"""
+    """Создание и управление Docker контейнерами агентов (agent + browser pair)"""
 
     def __init__(self) -> None:
         self.docker_client = DockerClient()
 
     async def spawn(self, agent: Agent, db: AsyncSession) -> None:
         """
-        Создать и запустить Docker контейнер для агента
-
-        Args:
-            agent: Экземпляр агента из БД
-            db: Асинхронная сессия БД
+        Создать и запустить Docker контейнеры для агента:
+        1. Docker network
+        2. Browser sidecar
+        3. Agent container
         """
-        # Проверяем обязательные поля
         if not agent.telegram_bot_token:
             raise ValueError("telegram_bot_token обязателен для создания агента")
         if not agent.claude_api_key:
@@ -30,54 +28,81 @@ class AgentSpawner:
         port = await PortManager.allocate_port(db)
         agent.port = port
 
-        # Создаём контейнер
-        container_name = f"phl-jobs-agent-{agent.id}"
+        # 1. Создаём network
+        network = self.docker_client.create_network(agent.id)
+        network_name = network.name
 
-        container = self.docker_client.create_container(
-            name=container_name,
-            port=port,
+        # 2. Создаём browser sidecar
+        browser_container = self.docker_client.create_browser_container(
+            agent_id=agent.id,
+            network_name=network_name,
+        )
+        agent.browser_container_id = browser_container.id
+
+        # 3. Создаём agent container
+        agent_container = self.docker_client.create_agent_container(
+            agent_id=agent.id,
+            network_name=network_name,
             telegram_bot_token=agent.telegram_bot_token,
             claude_api_key=agent.claude_api_key,
-            custom_instructions=agent.custom_instructions
+            telegram_user_id=agent.telegram_user_id,
+            custom_instructions=agent.custom_instructions,
         )
+        agent.container_id = agent_container.id
 
-        # Обновляем агента
-        agent.container_id = container.id
         agent.status = AgentStatus.RUNNING
-
         await db.commit()
 
     async def stop(self, agent: Agent) -> None:
-        """Остановить контейнер агента"""
-        if not agent.container_id:
-            raise ValueError("У агента нет container_id")
+        """Остановить оба контейнера: agent, затем browser"""
+        if agent.container_id:
+            self.docker_client.stop_container(agent.container_id)
+        if agent.browser_container_id:
+            self.docker_client.stop_container(agent.browser_container_id)
 
-        self.docker_client.stop_container(agent.container_id)
         agent.status = AgentStatus.STOPPED
 
     async def start(self, agent: Agent) -> None:
-        """Запустить контейнер агента"""
-        if not agent.container_id:
-            raise ValueError("У агента нет container_id")
+        """Запустить оба контейнера: browser, затем agent"""
+        if agent.browser_container_id:
+            self.docker_client.start_container(agent.browser_container_id)
+        if agent.container_id:
+            self.docker_client.start_container(agent.container_id)
 
-        self.docker_client.start_container(agent.container_id)
         agent.status = AgentStatus.RUNNING
 
     async def remove(self, agent: Agent) -> None:
-        """Удалить контейнер агента"""
-        if not agent.container_id:
-            return
+        """
+        Удалить контейнеры и network.
+        Volumes НЕ удаляются — данные сохраняются.
+        """
+        # Stop
+        if agent.container_id:
+            self.docker_client.stop_container(agent.container_id)
+        if agent.browser_container_id:
+            self.docker_client.stop_container(agent.browser_container_id)
 
-        self.docker_client.remove_container(agent.container_id)
+        # Remove containers
+        if agent.container_id:
+            self.docker_client.remove_container(agent.container_id)
+        if agent.browser_container_id:
+            self.docker_client.remove_container(agent.browser_container_id)
+
+        # Remove network
+        network_name = f"jobs-agent-{agent.id}-net"
+        self.docker_client.remove_network(network_name)
+
+        # Update agent state
         agent.status = AgentStatus.DELETED
         agent.container_id = None
+        agent.browser_container_id = None
 
         if agent.port:
             await PortManager.release_port(agent.port)
             agent.port = None
 
     async def check_status(self, agent: Agent) -> Optional[str]:
-        """Проверить реальный статус контейнера"""
+        """Проверить реальный статус контейнера агента"""
         if not agent.container_id:
             return None
 

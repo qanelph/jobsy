@@ -33,6 +33,7 @@ class Agent(Base):
         nullable=False
     )
     container_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    browser_container_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     port: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
 
     # Кастомизация

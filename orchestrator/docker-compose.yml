@@ -24,6 +24,11 @@ services:
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:-development-secret-key}
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
       DOCKER_BASE_URL: unix:///var/run/docker.sock
+      TG_API_ID: ${TG_API_ID:-0}
+      TG_API_HASH: ${TG_API_HASH:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      HTTP_PROXY: ${HTTP_PROXY:-}
+      TIMEZONE: ${TIMEZONE:-Europe/Moscow}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./src:/app/src

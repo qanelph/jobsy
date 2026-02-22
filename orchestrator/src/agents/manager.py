@@ -124,8 +124,8 @@ class AgentManager:
         if not agent:
             return None
 
-        if agent.status != AgentStatus.STOPPED:
-            raise ValueError(f"Агент должен быть в статусе STOPPED, текущий: {agent.status}")
+        if agent.status not in (AgentStatus.STOPPED, AgentStatus.ERROR):
+            raise ValueError(f"Агент должен быть в статусе STOPPED или ERROR, текущий: {agent.status}")
 
         await self.spawner.start(agent)
         await db.commit()
