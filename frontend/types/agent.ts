@@ -8,6 +8,9 @@ export interface Agent {
   container_id: string | null
   port: number | null
   custom_instructions: string | null
+  telegram_bot_token: string | null
+  browser_enabled: boolean
+  env_vars: Record<string, string> | null
   total_sessions: number
   active_sessions: number
   is_active: boolean
@@ -22,6 +25,8 @@ export interface CreateAgentRequest {
   custom_instructions?: string
   telegram_bot_token?: string
   claude_api_key?: string
+  browser_enabled?: boolean
+  env_vars?: Record<string, string>
 }
 
 export interface UpdateAgentRequest {
@@ -30,4 +35,14 @@ export interface UpdateAgentRequest {
   telegram_bot_token?: string
   claude_api_key?: string
   is_active?: boolean
+  browser_enabled?: boolean
+  env_vars?: Record<string, string>
 }
+
+export interface AgentConfigField {
+  value: string | number | string[] | null
+  mutable: boolean
+  type?: string // "str" | "int" | "secret" | "path" | "list[int]" | ...
+}
+
+export type AgentConfig = Record<string, AgentConfigField>

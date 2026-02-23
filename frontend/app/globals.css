@@ -4,113 +4,49 @@
 
 @layer base {
   :root {
-    --background: 224 30% 8%;
-    --foreground: 210 40% 96%;
-    --card: 224 30% 12%;
-    --card-foreground: 210 40% 96%;
-    --popover: 224 30% 10%;
-    --popover-foreground: 210 40% 96%;
-    --primary: 220 90% 56%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 224 20% 18%;
-    --secondary-foreground: 210 40% 96%;
-    --muted: 224 20% 18%;
-    --muted-foreground: 215 20% 55%;
-    --accent: 224 20% 18%;
-    --accent-foreground: 210 40% 96%;
-    --destructive: 0 84% 60%;
-    --destructive-foreground: 0 0% 100%;
-    --border: 224 20% 18%;
-    --input: 224 20% 18%;
-    --ring: 220 90% 56%;
-    --radius: 0.75rem;
-
-    /* Glass tokens (dark) */
-    --glass-bg: rgba(255, 255, 255, 0.06);
-    --glass-border: rgba(255, 255, 255, 0.08);
-    --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-    --blur: 20px;
-
-    /* Accent palette */
-    --accent-blue: 220 90% 56%;
-    --accent-green: 142 72% 45%;
-    --accent-amber: 38 92% 50%;
-    --accent-red: 0 84% 60%;
+    --void: #050505;
+    --panel: #0a0a0a;
+    --hover: #141414;
+    --active: #1a1a1a;
+    --line-subtle: #333;
+    --line-faint: #222;
+    --copper: #D99E6B;
+    --rose: #CD5C5C;
+    --text-bright: #fff;
+    --text-main: #e0e0e0;
+    --text-dim: #666;
   }
-}
 
-@layer base {
   * {
-    @apply border-border;
+    box-sizing: border-box;
   }
 
   body {
-    @apply text-foreground antialiased;
-    background: linear-gradient(135deg, hsl(224 30% 6%) 0%, hsl(260 20% 10%) 50%, hsl(224 30% 6%) 100%);
-    background-attachment: fixed;
-    min-height: 100vh;
+    background: var(--void);
+    color: var(--text-main);
+    font-family: system-ui, -apple-system, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    margin: 0;
+  }
+
+  input, textarea, button {
+    font-family: inherit;
   }
 }
 
-@layer components {
-  .glass {
-    background: var(--glass-bg);
-    backdrop-filter: blur(var(--blur));
-    -webkit-backdrop-filter: blur(var(--blur));
-    border: 1px solid var(--glass-border);
-    box-shadow: var(--glass-shadow);
-    border-radius: 16px;
-  }
-
-  .glass-subtle {
-    background: rgba(255, 255, 255, 0.04);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
-    border-radius: 12px;
-  }
-
-  .glass-input {
-    background: rgba(255, 255, 255, 0.06);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 12px;
-    transition: all 0.2s ease;
-  }
-
-  .glass-input:focus {
-    background: rgba(255, 255, 255, 0.1);
-    border-color: hsl(220 90% 56% / 0.5);
-    box-shadow: 0 0 0 3px hsl(220 90% 56% / 0.15);
-  }
-
-  .glass-sidebar {
-    background: rgba(255, 255, 255, 0.04);
-    backdrop-filter: blur(24px);
-    -webkit-backdrop-filter: blur(24px);
-    border-right: 1px solid rgba(255, 255, 255, 0.06);
-    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.2);
-  }
-}
-
-@keyframes blink {
-  50% { opacity: 0; }
-}
-
-/* Thin scrollbar for chat */
-.scrollbar-thin {
-  scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
-}
-.scrollbar-thin::-webkit-scrollbar {
+/* Minimal scrollbar */
+::-webkit-scrollbar {
   width: 4px;
 }
-.scrollbar-thin::-webkit-scrollbar-track {
+::-webkit-scrollbar-track {
   background: transparent;
 }
-.scrollbar-thin::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
+::-webkit-scrollbar-thumb {
+  background: var(--line-faint);
   border-radius: 2px;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-faint) transparent;
 }

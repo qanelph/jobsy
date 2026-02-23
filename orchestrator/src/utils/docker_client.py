@@ -1,5 +1,6 @@
 import io
 import json
+import logging
 import tarfile
 
 import docker
@@ -8,6 +9,8 @@ from docker.models.networks import Network
 from typing import Optional
 
 from ..config import settings
+
+logger = logging.getLogger(__name__)
 
 
 class DockerClient:
@@ -69,6 +72,8 @@ class DockerClient:
         port: int,
         claude_api_key: Optional[str] = None,
         custom_instructions: Optional[str] = None,
+        browser_enabled: bool = True,
+        extra_env: Optional[dict[str, str]] = None,
     ) -> Container:
         """Создать и запустить контейнер агента с правильными env vars и volumes"""
         container_name = f"jobs-agent-{agent_id}"
@@ -78,10 +83,16 @@ class DockerClient:
             "OPENAI_API_KEY": settings.openai_api_key,
             "HTTP_PROXY": settings.http_proxy,
             "TZ": settings.timezone,
-            "BROWSER_CDP_URL": "http://browser:9223",
             "JWT_SECRET_KEY": settings.jwt_secret_key,
             "SKIP_SETUP": "1",
         }
+
+        if browser_enabled:
+            environment["BROWSER_CDP_URL"] = "http://browser:9223"
+
+        # Per-agent environment variables
+        if extra_env:
+            environment.update(extra_env)
 
         # Bot API (aiogram) — только токен
         if telegram_bot_token:
@@ -151,6 +162,16 @@ class DockerClient:
             container.reload()
             return container.status
         return None
+
+    def connect_to_orchestrator_network(self, container_id: str) -> None:
+        """Подключить контейнер к сети оркестратора для proxy-доступа."""
+        network_name = "orchestrator_default"
+        try:
+            network = self.client.networks.get(network_name)
+            network.connect(container_id)
+        except docker.errors.APIError as e:
+            # Уже подключён или сеть не найдена — не фатально
+            logger.warning("Could not connect to %s: %s", network_name, e)
 
     def write_credentials_to_container(self, container_id: str, credentials: dict) -> bool:
         """Записать .credentials.json в контейнер через put_archive"""

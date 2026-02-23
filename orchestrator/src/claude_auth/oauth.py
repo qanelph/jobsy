@@ -74,7 +74,7 @@ class ClaudeOAuthClient:
             "state": state,
         }
 
-        async with httpx.AsyncClient(proxy=_get_proxy()) as client:
+        async with httpx.AsyncClient(proxy=_get_proxy(), timeout=15.0) as client:
             resp = await client.post(
                 self.config.token_url,
                 json=payload,
@@ -101,7 +101,7 @@ class ClaudeOAuthClient:
             "scope": self.config.scopes,
         }
 
-        async with httpx.AsyncClient(proxy=_get_proxy()) as client:
+        async with httpx.AsyncClient(proxy=_get_proxy(), timeout=15.0) as client:
             resp = await client.post(
                 self.config.token_url,
                 json=payload,

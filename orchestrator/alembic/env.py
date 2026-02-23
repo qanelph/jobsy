@@ -16,7 +16,8 @@ sys.path.append(str(Path(__file__).parent.parent))
 from src.config import settings
 from src.database import Base
 from src.auth.models import User, RefreshToken  # noqa
-from src.agents.models import Agent  # noqa
+from src.agents.models import Agent, GlobalConfig  # noqa
+from src.claude_auth.models import ClaudeCredential  # noqa
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

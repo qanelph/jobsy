@@ -1,6 +1,6 @@
 import axios, { type AxiosInstance, type AxiosError } from 'axios'
 import { authStorage } from './auth'
-import type { Agent, CreateAgentRequest, UpdateAgentRequest } from '@/types/agent'
+import type { Agent, AgentConfig, CreateAgentRequest, UpdateAgentRequest } from '@/types/agent'
 import type { AuthResponse, TelegramUser } from '@/types/auth'
 import type { ClaudeAuthStatus, OAuthStartResponse } from '@/types/claude-auth'
 
@@ -78,6 +78,37 @@ class ApiClient {
 
   async stopAgent(id: number): Promise<Agent> {
     const response = await this.client.post<Agent>(`/agents/${id}/stop`)
+    return response.data
+  }
+
+  async restartAgent(id: number): Promise<Agent> {
+    const response = await this.client.post<Agent>(`/agents/${id}/restart`)
+    return response.data
+  }
+
+  // Agent Settings (proxy to agent container)
+
+  async getAgentSettings(id: number, unmask = false): Promise<AgentConfig> {
+    const response = await this.client.get<AgentConfig>(`/agents/${id}/settings`, {
+      params: unmask ? { unmask: true } : undefined,
+    })
+    return response.data
+  }
+
+  async patchAgentSettings(id: number, data: Record<string, unknown>): Promise<AgentConfig> {
+    const response = await this.client.patch<AgentConfig>(`/agents/${id}/settings`, data)
+    return response.data
+  }
+
+  // Global Config
+
+  async getGlobalConfig(): Promise<{ env_vars: Record<string, string> }> {
+    const response = await this.client.get<{ env_vars: Record<string, string> }>('/agents/config')
+    return response.data
+  }
+
+  async updateGlobalConfig(env_vars: Record<string, string>): Promise<{ env_vars: Record<string, string> }> {
+    const response = await this.client.patch<{ env_vars: Record<string, string> }>('/agents/config', { env_vars })
     return response.data
   }
 

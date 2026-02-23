@@ -14,6 +14,7 @@ interface AgentsState {
   deleteAgent: (id: number) => Promise<void>
   startAgent: (id: number) => Promise<void>
   stopAgent: (id: number) => Promise<void>
+  restartAgent: (id: number) => Promise<void>
 }
 
 export const useAgentsStore = create<AgentsState>((set, get) => ({
@@ -95,6 +96,15 @@ export const useAgentsStore = create<AgentsState>((set, get) => ({
   stopAgent: async (id: number) => {
     set({ loading: true, error: null })
     const agent = await apiClient.stopAgent(id)
+    set(state => ({
+      agents: state.agents.map(a => a.id === id ? agent : a),
+      loading: false,
+    }))
+  },
+
+  restartAgent: async (id: number) => {
+    set({ loading: true, error: null })
+    const agent = await apiClient.restartAgent(id)
     set(state => ({
       agents: state.agents.map(a => a.id === id ? agent : a),
       loading: false,

@@ -1,4 +1,6 @@
+import json
 from typing import Optional
+
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 
@@ -29,6 +31,8 @@ class AgentManager:
             custom_instructions=data.custom_instructions,
             telegram_bot_token=data.telegram_bot_token,
             claude_api_key=data.claude_api_key,
+            browser_enabled=data.browser_enabled,
+            env_vars=json.dumps(data.env_vars) if data.env_vars else None,
             status=AgentStatus.CREATING
         )
 
@@ -107,7 +111,10 @@ class AgentManager:
         # Обновляем только переданные поля
         update_data = data.model_dump(exclude_unset=True)
         for field, value in update_data.items():
-            setattr(agent, field, value)
+            if field == 'env_vars':
+                setattr(agent, field, json.dumps(value) if value else None)
+            else:
+                setattr(agent, field, value)
 
         await db.commit()
         await db.refresh(agent)
@@ -153,7 +160,7 @@ class AgentManager:
         return AgentResponse.model_validate(agent)
 
     async def restart_agent(self, agent_id: int, db: AsyncSession) -> Optional[AgentResponse]:
-        """Перезапустить агента"""
+        """Перезапустить агента (пересоздание контейнеров с актуальными настройками)"""
         result = await db.execute(
             select(Agent).where(Agent.id == agent_id)
         )
@@ -162,11 +169,7 @@ class AgentManager:
         if not agent:
             return None
 
-        if agent.status == AgentStatus.RUNNING:
-            await self.spawner.stop(agent)
-
-        await self.spawner.start(agent)
-        await db.commit()
+        await self.spawner.respawn(agent, db)
         await db.refresh(agent)
 
         return AgentResponse.model_validate(agent)

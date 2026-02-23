@@ -9,6 +9,20 @@ from sqlalchemy.sql import func
 from ..database import Base
 
 
+class GlobalConfig(Base):
+    __tablename__ = "global_config"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
+    env_vars: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON {"KEY": "value"}
+    settings_json: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON mutable settings overrides
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+
 class AgentStatus(str, Enum):
     CREATING = "creating"
     RUNNING = "running"
@@ -40,6 +54,8 @@ class Agent(Base):
     custom_instructions: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     telegram_bot_token: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     claude_api_key: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    browser_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, server_default="true")
+    env_vars: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON {"KEY": "value"}
 
     # Метрики
     total_sessions: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
