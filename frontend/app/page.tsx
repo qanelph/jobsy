@@ -32,7 +32,7 @@ export default function HomePage() {
 
   // Poll when any agent is in transitional state (creating)
   useEffect(() => {
-    const hasTransitional = agents.some(a => a.status === 'creating')
+    const hasTransitional = agents.some(a => a.status === 'creating' || a.status === 'stopping')
     if (!hasTransitional) return
     const interval = setInterval(() => fetchAgents(), 3000)
     return () => clearInterval(interval)

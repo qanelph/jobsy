@@ -6,6 +6,7 @@ import type { Agent } from '@/types/agent'
 const statusDot: Record<string, string> = {
   running: 'text-emerald-400',
   creating: 'text-copper',
+  stopping: 'text-copper',
   stopped: 'text-text-dim',
   error: 'text-rose',
   deleted: 'text-text-dim',

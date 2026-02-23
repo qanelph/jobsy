@@ -30,7 +30,8 @@ import {
 
 const statusLabel: Record<string, { symbol: string; text: string; color: string }> = {
   running: { symbol: '\u25CF', text: 'running', color: 'text-emerald-400' },
-  creating: { symbol: '\u25CF', text: 'creating', color: 'text-copper' },
+  creating: { symbol: '\u25CF', text: 'creating...', color: 'text-copper' },
+  stopping: { symbol: '\u25CF', text: 'stopping...', color: 'text-copper' },
   stopped: { symbol: '\u25CB', text: 'stopped', color: 'text-text-dim' },
   error: { symbol: '\u2715', text: 'error', color: 'text-rose' },
   deleted: { symbol: '\u2715', text: 'deleted', color: 'text-text-dim' },
@@ -274,7 +275,7 @@ export function AgentDetail({ agent, onDeleted }: AgentDetailProps) {
     apiClient.getGlobalConfig().then(({ env_vars }) => setGlobalConfig(env_vars)).catch(() => {})
   }, [])
 
-  // Fetch live config when agent is running
+  // Fetch live config when agent is running (with retry)
   useEffect(() => {
     if (agent.status !== 'running') {
       setAgentConfig(null)
@@ -282,17 +283,31 @@ export function AgentDetail({ agent, onDeleted }: AgentDetailProps) {
       setConfigError(null)
       return
     }
-    setConfigLoading(true)
-    setConfigError(null)
-    apiClient.getAgentSettings(agent.id)
-      .then((config) => {
-        setAgentConfig(config)
-        setConfigDraft({})
-        setRevealedKeys(new Set())
-        setFieldErrors({})
-      })
-      .catch(() => setConfigError('не удалось загрузить конфиг'))
-      .finally(() => setConfigLoading(false))
+    let cancelled = false
+    let retryTimer: ReturnType<typeof setTimeout>
+    const load = (attempt = 0) => {
+      setConfigLoading(true)
+      setConfigError(null)
+      apiClient.getAgentSettings(agent.id)
+        .then((config) => {
+          if (cancelled) return
+          setAgentConfig(config)
+          setConfigDraft({})
+          setRevealedKeys(new Set())
+          setFieldErrors({})
+        })
+        .catch(() => {
+          if (cancelled) return
+          if (attempt < 3) {
+            retryTimer = setTimeout(() => load(attempt + 1), 3000)
+          } else {
+            setConfigError('не удалось загрузить конфиг')
+          }
+        })
+        .finally(() => { if (!cancelled) setConfigLoading(false) })
+    }
+    load()
+    return () => { cancelled = true; clearTimeout(retryTimer) }
   }, [agent.id, agent.status])
 
   useEffect(() => {
@@ -690,6 +705,9 @@ export function AgentDetail({ agent, onDeleted }: AgentDetailProps) {
 
       {/* Actions footer */}
       <div className="flex items-center gap-2 px-6 h-12 border-t border-line-faint">
+        {(agent.status === 'stopping' || agent.status === 'creating') && (
+          <span className="text-xs text-copper font-mono">{status.text}</span>
+        )}
         {(agent.status === 'stopped' || agent.status === 'error') && (
           <button onClick={handleStart} disabled={actionLoading === 'start'} className="h-7 px-3 text-xs text-emerald-400 hover:bg-emerald-400/10 rounded transition-colors disabled:opacity-40">
             {actionLoading === 'start' ? '...' : 'start'}

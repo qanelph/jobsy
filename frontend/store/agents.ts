@@ -76,38 +76,43 @@ export const useAgentsStore = create<AgentsState>((set, get) => ({
   },
 
   deleteAgent: async (id: number) => {
-    set({ loading: true, error: null })
-    await apiClient.deleteAgent(id)
+    // optimistic: remove immediately
     set(state => ({
       agents: state.agents.filter(a => a.id !== id),
-      loading: false,
     }))
+    await apiClient.deleteAgent(id)
   },
 
   startAgent: async (id: number) => {
-    set({ loading: true, error: null })
+    // optimistic: → creating
+    set(state => ({
+      agents: state.agents.map(a => a.id === id ? { ...a, status: 'creating' as const } : a),
+    }))
     const agent = await apiClient.startAgent(id)
     set(state => ({
       agents: state.agents.map(a => a.id === id ? agent : a),
-      loading: false,
     }))
   },
 
   stopAgent: async (id: number) => {
-    set({ loading: true, error: null })
+    // optimistic: → stopping
+    set(state => ({
+      agents: state.agents.map(a => a.id === id ? { ...a, status: 'stopping' as const } : a),
+    }))
     const agent = await apiClient.stopAgent(id)
     set(state => ({
       agents: state.agents.map(a => a.id === id ? agent : a),
-      loading: false,
     }))
   },
 
   restartAgent: async (id: number) => {
-    set({ loading: true, error: null })
+    // optimistic: → stopping → creating (API handles the transition)
+    set(state => ({
+      agents: state.agents.map(a => a.id === id ? { ...a, status: 'stopping' as const } : a),
+    }))
     const agent = await apiClient.restartAgent(id)
     set(state => ({
       agents: state.agents.map(a => a.id === id ? agent : a),
-      loading: false,
     }))
   },
 }))
