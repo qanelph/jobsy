@@ -222,6 +222,18 @@ class K8sSpawner:
                 )
             )
 
+        # initContainer: chown /data для non-root user jobs (uid=1000)
+        init_containers = [
+            client.V1Container(
+                name="fix-permissions",
+                image="busybox:1.36",
+                command=["sh", "-c", "chown -R 1000:1000 /data"],
+                volume_mounts=[
+                    client.V1VolumeMount(name="agent-data", mount_path="/data"),
+                ],
+            ),
+        ]
+
         deployment = client.V1Deployment(
             metadata=client.V1ObjectMeta(name=self._deployment_name(agent), labels=labels),
             spec=client.V1DeploymentSpec(
@@ -230,6 +242,7 @@ class K8sSpawner:
                 template=client.V1PodTemplateSpec(
                     metadata=client.V1ObjectMeta(labels=labels),
                     spec=client.V1PodSpec(
+                        init_containers=init_containers,
                         containers=containers,
                         volumes=volumes or None,
                     ),
@@ -283,19 +296,16 @@ class K8sSpawner:
         await db.commit()
         await self.spawn(agent, db)
 
-    async def remove(self, agent: Agent) -> None:
-        """Удалить Deployment + Service + Secret."""
+    async def remove(self, agent: Agent, delete_data: bool = False) -> None:
+        """Удалить Deployment + Service + Secret. PVC сохраняется всегда (ручное удаление через kubectl)."""
         dep_name = self._deployment_name(agent)
         svc_name = self._service_name(agent)
         secret_name = self._secret_name(agent)
-
-        pvc_name = self._pvc_name(agent)
 
         for delete_fn, name in [
             (self.apps_v1.delete_namespaced_deployment, dep_name),
             (self.core_v1.delete_namespaced_service, svc_name),
             (self.core_v1.delete_namespaced_secret, secret_name),
-            (self.core_v1.delete_namespaced_persistent_volume_claim, pvc_name),
         ]:
             try:
                 delete_fn(name=name, namespace=self.namespace)

@@ -194,7 +194,7 @@ class AgentManager:
         if not agent:
             return False
 
-        await self.spawner.remove(agent)
+        await self.spawner.remove(agent, delete_data=True)
         await db.commit()
 
         return True

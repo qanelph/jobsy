@@ -131,7 +131,7 @@ class AgentSpawner:
         await db.commit()
         await self.spawn(agent, db)
 
-    async def remove(self, agent: Agent) -> None:
+    async def remove(self, agent: Agent, delete_data: bool = False) -> None:
         """
         Удалить контейнеры и network.
         Volumes НЕ удаляются — данные сохраняются.
