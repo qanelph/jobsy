@@ -180,8 +180,6 @@ async function fetchBotInfo(token: string): Promise<BotInfo | null> {
 
 // --- Helpers ---
 
-const deriveLabel = (key: string): string => key.replace(/_/g, ' ')
-
 const deriveInputType = (field: AgentConfigField): 'text' | 'password' | 'number' => {
   if (field.type === 'secret') return 'password'
   if (field.type === 'int') return 'number'
@@ -325,7 +323,7 @@ export function AgentDetail({ agent, onDeleted }: AgentDetailProps) {
 
   const getConfigValue = (key: string): string | number => {
     if (key in configDraft) return configDraft[key]
-    // FORCE_MUTABLE fields: prefer env_var value (local or global) over live config
+    // Prefer persisted env_var value (local or global) over live config
     const envKey = toEnvKey(key)
     if (envKey in envVars && envVars[envKey] !== '') return envVars[envKey]
     if (envKey in globalConfig && globalConfig[envKey] !== '') return globalConfig[envKey]
@@ -348,12 +346,7 @@ export function AgentDetail({ agent, onDeleted }: AgentDetailProps) {
 
   const hasValidationErrors = Object.values(fieldErrors).some(Boolean)
 
-  // Fields that orchestrator treats as mutable regardless of agent's mutable flag
-  const FORCE_MUTABLE = new Set([
-    'tg_api_id', 'tg_api_hash', 'tg_bot_token',
-    'tg_user_id', 'tg_owner_ids', 'anthropic_api_key',
-  ])
-  const isMutable = (key: string, field: AgentConfigField) => field.mutable || FORCE_MUTABLE.has(key)
+  const isMutable = (field: AgentConfigField) => field.mutable
 
   const handleReveal = async (key: string) => {
     if (revealedKeys.has(key)) {
@@ -367,8 +360,8 @@ export function AgentDetail({ agent, onDeleted }: AgentDetailProps) {
   }
 
   const configEntries = agentConfig ? Object.entries(agentConfig) : []
-  const mutableFields = configEntries.filter(([k, f]) => isMutable(k, f))
-  const immutableFields = configEntries.filter(([k, f]) => !isMutable(k, f))
+  const mutableFields = configEntries.filter(([, f]) => isMutable(f))
+  const immutableFields = configEntries.filter(([, f]) => !isMutable(f))
   const globalMutable = mutableFields.filter(([key]) => getScope(key) === 'global')
   const localMutable = mutableFields.filter(([key]) => getScope(key) === 'local')
 
@@ -409,31 +402,30 @@ export function AgentDetail({ agent, onDeleted }: AgentDetailProps) {
   const handleSave = async () => {
     setActionLoading('save')
 
-    // 1. Split configDraft: agent-mutable → live patch, FORCE_MUTABLE → env_vars (respect scope)
+    // 1. All mutable configDraft fields → persist to env_vars AND live-patch
     const agentPatch: Record<string, string | number> = {}
     const localPatch: Record<string, string> = {}
     const globalPatch: Record<string, string> = {}
     for (const [key, value] of Object.entries(configDraft)) {
       const field = agentConfig?.[key]
-      if (field?.mutable) {
-        agentPatch[key] = value
-      } else if (FORCE_MUTABLE.has(key)) {
-        const envKey = toEnvKey(key)
-        let envValue = String(value)
-        // list fields: "123, 456" → "[123,456]"
-        if (field && isListType(field) && !envValue.startsWith('[')) {
-          const nums = envValue.split(',').map(s => s.trim()).filter(Boolean)
-          envValue = `[${nums.join(',')}]`
-        }
-        if (getScope(key) === 'local') {
-          localPatch[envKey] = envValue
-        } else {
-          globalPatch[envKey] = envValue
-        }
+      if (!field?.mutable) continue
+      // Live-patch payload (original config keys)
+      agentPatch[key] = value
+      // Persist to env_vars (env key format)
+      const envKey = toEnvKey(key)
+      let envValue = String(value)
+      if (isListType(field) && !envValue.startsWith('[')) {
+        const nums = envValue.split(',').map(s => s.trim()).filter(Boolean)
+        envValue = `[${nums.join(',')}]`
+      }
+      if (getScope(key) === 'local') {
+        localPatch[envKey] = envValue
+      } else {
+        globalPatch[envKey] = envValue
       }
     }
 
-    // Live-patch agent-mutable fields
+    // Live-patch running agent for instant effect (no restart needed for these)
     if (Object.keys(agentPatch).length > 0 && agent.status === 'running') {
       const updated = await apiClient.patchAgentSettings(agent.id, agentPatch).catch(() => null)
       if (updated) setAgentConfig(updated)
@@ -444,17 +436,6 @@ export function AgentDetail({ agent, onDeleted }: AgentDetailProps) {
     // 2. Build merged env_vars + globalConfig with patches
     const mergedEnv = { ...envVars, ...localPatch }
     const mergedGlobal = { ...globalConfig, ...globalPatch }
-
-    if (agentConfig) {
-      for (const [key, field] of mutableFields) {
-        if (!field.mutable) continue
-        const envKey = toEnvKey(key)
-        const value = String(getConfigValue(key))
-        if (getScope(key) === 'local') {
-          mergedEnv[envKey] = value
-        }
-      }
-    }
 
     setEnvVars(mergedEnv)
     setGlobalConfig(mergedGlobal)
@@ -597,7 +578,7 @@ export function AgentDetail({ agent, onDeleted }: AgentDetailProps) {
                         <DraggableConfigItem
                           key={key}
                           id={key}
-                          label={deriveLabel(key)}
+                          label={toEnvKey(key)}
                           inputType={deriveInputType(field)}
                           value={getConfigValue(key)}
                           isGlobal={true}
@@ -614,7 +595,7 @@ export function AgentDetail({ agent, onDeleted }: AgentDetailProps) {
                         <DraggableConfigItem
                           key={key}
                           id={key}
-                          label={deriveLabel(key)}
+                          label={toEnvKey(key)}
                           inputType={deriveInputType(field)}
                           value={getConfigValue(key)}
                           isGlobal={false}
@@ -631,7 +612,7 @@ export function AgentDetail({ agent, onDeleted }: AgentDetailProps) {
                     {activeEntry && (
                       <div className="flex items-center gap-2 rounded px-2 py-1 bg-panel border border-copper/40 shadow-lg">
                         <span className="text-copper text-[10px] shrink-0">{'\u2261'}</span>
-                        <span className="text-xs text-text-main">{deriveLabel(activeEntry[0])}</span>
+                        <span className="text-xs text-text-main">{toEnvKey(activeEntry[0])}</span>
                       </div>
                     )}
                   </DragOverlay>
@@ -642,7 +623,7 @@ export function AgentDetail({ agent, onDeleted }: AgentDetailProps) {
                 <div className="space-y-1 opacity-60">
                   {immutableFields.map(([key, field]) => (
                     <div key={key} className="flex items-center gap-2 rounded px-2 py-1">
-                      <label className="w-36 text-xs text-text-dim shrink-0 truncate">{deriveLabel(key)}</label>
+                      <label className="w-36 text-xs text-text-dim shrink-0 truncate">{toEnvKey(key)}</label>
                       <span className="flex-1 h-7 flex items-center px-2 text-xs text-text-dim font-mono truncate">
                         {String(field.value ?? '—')}
                       </span>

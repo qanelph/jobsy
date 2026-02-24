@@ -42,7 +42,7 @@ class Agent(Base):
 
     # Статус и конфигурация
     status: Mapped[AgentStatus] = mapped_column(
-        SQLEnum(AgentStatus),
+        SQLEnum(AgentStatus, values_callable=lambda e: [x.value for x in e]),
         default=AgentStatus.CREATING,
         nullable=False
     )

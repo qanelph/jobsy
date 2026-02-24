@@ -6,14 +6,19 @@ from sqlalchemy import select, func
 
 from .models import Agent, AgentStatus
 from .schemas import AgentCreate, AgentUpdate, AgentResponse, AgentListResponse
-from .spawner import AgentSpawner
+from ..config import settings
 
 
 class AgentManager:
     """Управление жизненным циклом агентов"""
 
     def __init__(self) -> None:
-        self.spawner = AgentSpawner()
+        if settings.deployment_type == "k8s":
+            from .k8s_spawner import K8sSpawner
+            self.spawner = K8sSpawner()
+        else:
+            from .spawner import AgentSpawner
+            self.spawner = AgentSpawner()
 
     async def create_agent(self, data: AgentCreate, db: AsyncSession) -> AgentResponse:
         """Создать нового агента и запустить контейнер"""
@@ -134,8 +139,13 @@ class AgentManager:
         if agent.status not in (AgentStatus.STOPPED, AgentStatus.ERROR):
             raise ValueError(f"Агент должен быть в статусе STOPPED или ERROR, текущий: {agent.status}")
 
-        await self.spawner.start(agent)
-        await db.commit()
+        if agent.status == AgentStatus.ERROR:
+            # Агент в ошибке — deployment может не существовать, пересоздаём
+            await self.spawner.respawn(agent, db)
+        else:
+            await self.spawner.start(agent)
+            await db.commit()
+
         await db.refresh(agent)
 
         return AgentResponse.model_validate(agent)

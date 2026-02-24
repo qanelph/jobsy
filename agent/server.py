@@ -1,0 +1,94 @@
+"""Minimal Jobs agent HTTP server."""
+
+import json
+import os
+from http.server import HTTPServer, BaseHTTPRequestHandler
+from dataclasses import dataclass
+
+PORT = 8080
+
+MASKED_KEYS = {"anthropic_api_key", "tg_api_hash", "tg_bot_token", "openai_api_key"}
+
+
+@dataclass
+class ConfigField:
+    value: str | int | list[int] | None
+    mutable: bool
+    type: str  # "str" | "int" | "secret" | "list[int]"
+
+    def to_dict(self, unmask: bool = False) -> dict:
+        v = self.value
+        if not unmask and self.type == "secret" and isinstance(v, str) and v:
+            v = v[:4] + "..." + v[-4:] if len(v) > 8 else "***"
+        return {"value": v, "mutable": self.mutable, "type": self.type}
+
+
+def _parse_int_list(raw: str) -> list[int]:
+    if not raw:
+        return []
+    return [int(x.strip()) for x in raw.split(",") if x.strip()]
+
+
+def _build_config() -> dict[str, ConfigField]:
+    return {
+        "anthropic_api_key": ConfigField(os.environ.get("ANTHROPIC_API_KEY", ""), True, "secret"),
+        "openai_api_key": ConfigField(os.environ.get("OPENAI_API_KEY", ""), True, "secret"),
+        "tg_bot_token": ConfigField(os.environ.get("TG_BOT_TOKEN", ""), True, "secret"),
+        "tg_user_id": ConfigField(os.environ.get("TG_USER_ID", ""), True, "str"),
+        "tg_owner_ids": ConfigField(
+            _parse_int_list(os.environ.get("TG_OWNER_IDS", "")), True, "list[int]"
+        ),
+        "tg_api_id": ConfigField(os.environ.get("TG_API_ID", ""), True, "str"),
+        "tg_api_hash": ConfigField(os.environ.get("TG_API_HASH", ""), True, "secret"),
+        "claude_model": ConfigField(os.environ.get("CLAUDE_MODEL", "claude-sonnet-4-5-20250929"), True, "str"),
+        "http_proxy": ConfigField(os.environ.get("HTTP_PROXY", ""), True, "str"),
+        "timezone": ConfigField(os.environ.get("TZ", "Europe/Moscow"), False, "str"),
+        "custom_instructions": ConfigField(os.environ.get("CUSTOM_INSTRUCTIONS", ""), True, "str"),
+        "browser_cdp_url": ConfigField(os.environ.get("BROWSER_CDP_URL", ""), False, "str"),
+        "heartbeat_interval_minutes": ConfigField(
+            int(os.environ.get("HEARTBEAT_INTERVAL_MINUTES", "30")), True, "int"
+        ),
+    }
+
+
+CONFIG = _build_config()
+
+
+class Handler(BaseHTTPRequestHandler):
+    def _send_json(self, data: dict, status: int = 200) -> None:
+        body = json.dumps(data).encode()
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def do_GET(self) -> None:
+        if self.path.startswith("/config"):
+            unmask = "unmask=true" in (self.path.split("?", 1)[1] if "?" in self.path else "")
+            data = {k: f.to_dict(unmask=unmask) for k, f in CONFIG.items()}
+            self._send_json(data)
+        elif self.path == "/health":
+            self._send_json({"status": "ok"})
+        else:
+            self._send_json({"error": "not found"}, 404)
+
+    def do_PATCH(self) -> None:
+        if self.path.startswith("/config"):
+            length = int(self.headers.get("Content-Length", 0))
+            body = json.loads(self.rfile.read(length)) if length else {}
+            for k, v in body.items():
+                if k in CONFIG and CONFIG[k].mutable:
+                    CONFIG[k].value = v
+            data = {k: f.to_dict() for k, f in CONFIG.items()}
+            self._send_json(data)
+        else:
+            self._send_json({"error": "not found"}, 404)
+
+    def log_message(self, fmt: str, *args: object) -> None:
+        print(f"[agent] {fmt % args}")
+
+
+if __name__ == "__main__":
+    print(f"[agent] starting on :{PORT}")
+    HTTPServer(("0.0.0.0", PORT), Handler).serve_forever()

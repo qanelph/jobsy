@@ -13,6 +13,7 @@ class ImmutableSettings(BaseSettings):
     jwt_secret_key: str = "your-secret-key-change-in-production"
     jwt_algorithm: str = "HS256"
     docker_base_url: str = "unix:///var/run/docker.sock"
+    deployment_type: str = "docker"
 
 
 @dataclass(frozen=True)

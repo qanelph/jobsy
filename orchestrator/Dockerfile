@@ -8,6 +8,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Копирование кода
 COPY src/ ./src/
+COPY alembic/ ./alembic/
+COPY alembic.ini .
 
 # Создание .env файла по умолчанию (будет переопределён в docker-compose)
 ENV DATABASE_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/jobsy

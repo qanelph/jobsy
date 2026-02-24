@@ -32,7 +32,8 @@ app = FastAPI(
     title="PHL Jobsy Orchestrator",
     description="API для управления Jobs агентами",
     version="1.0.0",
-    lifespan=lifespan
+    lifespan=lifespan,
+    debug=False,
 )
 
 # CORS

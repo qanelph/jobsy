@@ -18,7 +18,10 @@ class ClaudeCredential(Base):
     __tablename__ = "claude_credentials"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
-    auth_mode: Mapped[AuthMode] = mapped_column(SQLEnum(AuthMode), nullable=False)
+    auth_mode: Mapped[AuthMode] = mapped_column(
+        SQLEnum(AuthMode, values_callable=lambda e: [x.value for x in e]),
+        nullable=False,
+    )
 
     # OAuth tokens
     access_token: Mapped[Optional[str]] = mapped_column(Text, nullable=True)

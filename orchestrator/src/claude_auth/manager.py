@@ -8,8 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from .models import ClaudeCredential, AuthMode
 from .schemas import ClaudeAuthStatusResponse, OAuthStartResponse
 from .oauth import ClaudeOAuthClient
-from .distributor import CredentialDistributor
-from ..utils.docker_client import DockerClient
+from .distributor import CredentialDistributor, CredentialDistributorProtocol, K8sCredentialDistributor
+from ..config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +20,10 @@ REFRESH_BUFFER_MS = 30 * 60 * 1000
 class ClaudeAuthManager:
     def __init__(self) -> None:
         self.oauth_client = ClaudeOAuthClient()
-        self.distributor = CredentialDistributor(DockerClient())
+        if settings.deployment_type == "k8s":
+            self.distributor: CredentialDistributorProtocol | None = K8sCredentialDistributor()
+        else:
+            self.distributor = CredentialDistributor()
 
     async def _get_credential(self, db: AsyncSession) -> Optional[ClaudeCredential]:
         result = await db.execute(select(ClaudeCredential).where(ClaudeCredential.id == 1))
@@ -90,8 +93,9 @@ class ClaudeAuthManager:
         )
 
         # Раздаём во все running агенты
-        count = await self.distributor.distribute_to_all_agents(db, credential)
-        logger.info("OAuth complete, distributed to %d agents", count)
+        if self.distributor:
+            count = await self.distributor.distribute_to_all_agents(db, credential)
+            logger.info("OAuth complete, distributed to %d agents", count)
 
         return await self.get_status(db)
 
@@ -152,7 +156,7 @@ class ClaudeAuthManager:
             return credential.api_key, None
 
         if credential.auth_mode == AuthMode.OAUTH and credential.access_token:
-            credentials_json = self.distributor.build_credentials_json(credential)
+            credentials_json = CredentialDistributor.build_credentials_json(credential)
             return None, credentials_json
 
         return None, None

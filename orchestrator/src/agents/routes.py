@@ -169,13 +169,21 @@ async def _proxy_to_agent(
     json_body: dict[str, Any] | None = None,
     params: dict[str, str] | None = None,
 ) -> dict[str, Any]:
-    """Проксировать запрос к HTTP API агента через Docker-контейнерное имя."""
-    container_name = f"jobs-agent-{agent.id}"
-    url = f"http://{container_name}:8080/config"
+    """Проксировать запрос к HTTP API агента."""
+    if settings.deployment_type == "k8s":
+        host = f"agent-{agent.id}-svc"
+    else:
+        host = f"jobs-agent-{agent.id}"
+    url = f"http://{host}:8080/config"
     headers = {"Authorization": f"Bearer {settings.jwt_secret_key}"}
 
-    async with httpx.AsyncClient(timeout=10.0, trust_env=False) as client:
-        response = await client.request(method, url, headers=headers, json=json_body, params=params)
+    try:
+        async with httpx.AsyncClient(timeout=10.0, trust_env=False) as client:
+            response = await client.request(method, url, headers=headers, json=json_body, params=params)
+    except httpx.ConnectError:
+        raise HTTPException(status_code=502, detail=f"Агент недоступен ({host}:8080)")
+    except httpx.TimeoutException:
+        raise HTTPException(status_code=504, detail=f"Таймаут соединения с агентом ({host}:8080)")
 
     if response.status_code >= 400:
         raise HTTPException(status_code=response.status_code, detail=response.text)
