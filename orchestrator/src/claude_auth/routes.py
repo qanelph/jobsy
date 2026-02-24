@@ -1,13 +1,16 @@
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, Header, HTTPException, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..config import settings
 from ..database import get_db
+from .distributor import CredentialDistributor
 from .manager import ClaudeAuthManager
 from .schemas import (
     OAuthStartResponse,
     OAuthCallbackRequest,
     ApiKeyRequest,
     ClaudeAuthStatusResponse,
+    CredentialsPullResponse,
     DistributeResponse,
 )
 
@@ -49,6 +52,25 @@ async def set_api_key(
 async def clear_credentials(db: AsyncSession = Depends(get_db)) -> Response:
     await _manager.clear_credentials(db)
     return Response(status_code=204)
+
+
+@router.get("/credentials", response_model=CredentialsPullResponse)
+async def pull_credentials(
+    authorization: str = Header(),
+    db: AsyncSession = Depends(get_db),
+) -> CredentialsPullResponse:
+    """Агент дёргает при старте — получает свежие credentials."""
+    expected = f"Bearer {settings.jwt_secret_key}"
+    if authorization != expected:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    credential = await _manager._get_credential(db)
+    if not credential or not credential.access_token:
+        return CredentialsPullResponse()
+
+    return CredentialsPullResponse(
+        credentials=CredentialDistributor.build_credentials_json(credential),
+    )
 
 
 @router.post("/distribute", response_model=DistributeResponse)

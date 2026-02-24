@@ -28,3 +28,7 @@ class ClaudeAuthStatusResponse(BaseModel):
 
 class DistributeResponse(BaseModel):
     distributed_to: int
+
+
+class CredentialsPullResponse(BaseModel):
+    credentials: Optional[dict] = None

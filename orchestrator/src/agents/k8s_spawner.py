@@ -1,4 +1,3 @@
-import base64
 import json
 import logging
 from typing import Optional
@@ -31,9 +30,6 @@ class K8sSpawner:
     def _service_name(self, agent: Agent) -> str:
         return f"agent-{agent.id}-svc"
 
-    def _secret_name(self, agent: Agent) -> str:
-        return f"agent-{agent.id}-claude-creds"
-
     def _pvc_name(self, agent: Agent) -> str:
         return f"agent-{agent.id}-data"
 
@@ -44,41 +40,11 @@ class K8sSpawner:
             "agent-name": agent.name,
         }
 
-    def _upsert_credentials_secret(
-        self, agent: Agent, credentials_json: dict
-    ) -> str:
-        """Создать/обновить Secret с .credentials.json. Возвращает имя Secret."""
-        secret_name = self._secret_name(agent)
-        content = json.dumps(credentials_json, indent=2)
-        secret = client.V1Secret(
-            metadata=client.V1ObjectMeta(
-                name=secret_name,
-                labels=self._labels(agent),
-            ),
-            data={
-                ".credentials.json": base64.b64encode(content.encode()).decode(),
-            },
-        )
-        try:
-            self.core_v1.read_namespaced_secret(name=secret_name, namespace=self.namespace)
-            self.core_v1.replace_namespaced_secret(
-                name=secret_name, namespace=self.namespace, body=secret
-            )
-        except client.exceptions.ApiException as e:
-            if e.status == 404:
-                self.core_v1.create_namespaced_secret(
-                    namespace=self.namespace, body=secret
-                )
-            else:
-                raise
-        return secret_name
-
     def _build_containers(
         self,
         agent: Agent,
         extra_env: dict[str, str],
         api_key: Optional[str],
-        has_credentials_secret: bool = False,
     ) -> list[client.V1Container]:
         # Базовые env vars (как в Docker spawner)
         environment: dict[str, str] = {
@@ -87,7 +53,9 @@ class K8sSpawner:
             "HTTP_PROXY": settings.http_proxy,
             "TZ": settings.timezone,
             "JWT_SECRET_KEY": settings.jwt_secret_key,
+            "ORCHESTRATOR_URL": "http://orchestrator-service",
             "SKIP_SETUP": "1",
+            "WORKSPACE_DIR": "/data/workspace",
         }
 
         if agent.browser_enabled:
@@ -114,15 +82,6 @@ class K8sSpawner:
         volume_mounts: list[client.V1VolumeMount] = [
             client.V1VolumeMount(name="agent-data", mount_path="/data"),
         ]
-        if has_credentials_secret:
-            volume_mounts.append(
-                client.V1VolumeMount(
-                    name="claude-creds",
-                    mount_path="/home/jobs/.claude/.credentials.json",
-                    sub_path=".credentials.json",
-                    read_only=False,
-                )
-            )
 
         containers = [
             client.V1Container(
@@ -162,12 +121,6 @@ class K8sSpawner:
                 "Не настроена авторизация Claude: нет ни OAuth, ни глобального API key, ни per-agent ключа"
             )
 
-        # OAuth credentials → K8s Secret
-        has_credentials_secret = False
-        if credentials_json:
-            self._upsert_credentials_secret(agent, credentials_json)
-            has_credentials_secret = True
-
         global_config = await db.get(GlobalConfig, 1)
         global_env: dict[str, str] = json.loads(global_config.env_vars or "{}") if global_config else {}
         local_env: dict[str, str] = json.loads(agent.env_vars or "{}")
@@ -198,9 +151,7 @@ class K8sSpawner:
             else:
                 raise
 
-        containers = self._build_containers(
-            agent, extra_env, agent_api_key, has_credentials_secret
-        )
+        containers = self._build_containers(agent, extra_env, agent_api_key)
 
         # Volumes
         volumes: list[client.V1Volume] = [
@@ -211,17 +162,6 @@ class K8sSpawner:
                 ),
             ),
         ]
-        if has_credentials_secret:
-            volumes.append(
-                client.V1Volume(
-                    name="claude-creds",
-                    secret=client.V1SecretVolumeSource(
-                        secret_name=self._secret_name(agent),
-                        default_mode=0o444,
-                    ),
-                )
-            )
-
         # initContainer: chown /data для non-root user jobs (uid=1000)
         init_containers = [
             client.V1Container(
@@ -297,15 +237,13 @@ class K8sSpawner:
         await self.spawn(agent, db)
 
     async def remove(self, agent: Agent, delete_data: bool = False) -> None:
-        """Удалить Deployment + Service + Secret. PVC сохраняется всегда (ручное удаление через kubectl)."""
+        """Удалить Deployment + Service. PVC сохраняется всегда (ручное удаление через kubectl)."""
         dep_name = self._deployment_name(agent)
         svc_name = self._service_name(agent)
-        secret_name = self._secret_name(agent)
 
         for delete_fn, name in [
             (self.apps_v1.delete_namespaced_deployment, dep_name),
             (self.core_v1.delete_namespaced_service, svc_name),
-            (self.core_v1.delete_namespaced_secret, secret_name),
         ]:
             try:
                 delete_fn(name=name, namespace=self.namespace)

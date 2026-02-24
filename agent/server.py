@@ -1,11 +1,14 @@
 """Minimal Jobs agent HTTP server."""
 
+import hmac
 import json
 import os
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from dataclasses import dataclass
+from pathlib import Path
 
 PORT = 8080
+CREDENTIALS_PATH = Path("/home/jobs/.claude/.credentials.json")
 
 MASKED_KEYS = {"anthropic_api_key", "tg_api_hash", "tg_bot_token", "openai_api_key"}
 
@@ -63,12 +66,44 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _check_auth(self) -> bool:
+        """Проверка Bearer {JWT_SECRET_KEY} — constant-time."""
+        secret = os.environ.get("JWT_SECRET_KEY", "")
+        if not secret:
+            self._send_json({"error": "JWT_SECRET_KEY not configured"}, 503)
+            return False
+        expected = f"Bearer {secret}"
+        auth = self.headers.get("Authorization", "")
+        if not hmac.compare_digest(auth.encode(), expected.encode()):
+            self._send_json({"error": "unauthorized"}, 401)
+            return False
+        return True
+
     def do_GET(self) -> None:
         if self.path.startswith("/config"):
             unmask = "unmask=true" in (self.path.split("?", 1)[1] if "?" in self.path else "")
             data = {k: f.to_dict(unmask=unmask) for k, f in CONFIG.items()}
             self._send_json(data)
         elif self.path == "/health":
+            self._send_json({"status": "ok"})
+        else:
+            self._send_json({"error": "not found"}, 404)
+
+    def do_POST(self) -> None:
+        if self.path == "/credentials":
+            if not self._check_auth():
+                return
+            length = int(self.headers.get("Content-Length", 0))
+            if not length:
+                self._send_json({"error": "empty body"}, 400)
+                return
+            body = json.loads(self.rfile.read(length))
+            credentials = body.get("credentials")
+            if not credentials:
+                self._send_json({"error": "missing 'credentials' field"}, 400)
+                return
+            CREDENTIALS_PATH.parent.mkdir(parents=True, exist_ok=True)
+            CREDENTIALS_PATH.write_text(json.dumps(credentials, indent=2))
             self._send_json({"status": "ok"})
         else:
             self._send_json({"error": "not found"}, 404)
@@ -89,6 +124,41 @@ class Handler(BaseHTTPRequestHandler):
         print(f"[agent] {fmt % args}")
 
 
+def _pull_credentials_on_start() -> None:
+    """Pull credentials от оркестратора при старте (если ORCHESTRATOR_URL задан)."""
+    import time
+    import urllib.request
+    import urllib.error
+
+    orchestrator_url = os.environ.get("ORCHESTRATOR_URL", "")
+    jwt_secret = os.environ.get("JWT_SECRET_KEY", "")
+    if not orchestrator_url or not jwt_secret:
+        return
+
+    url = f"{orchestrator_url.rstrip('/')}/claude-auth/credentials"
+    req = urllib.request.Request(url, headers={"Authorization": f"Bearer {jwt_secret}"})
+
+    for attempt in range(1, 4):
+        try:
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                data = json.loads(resp.read())
+            credentials = data.get("credentials")
+            if not credentials:
+                print("[agent] credentials pull: no credentials on orchestrator")
+                return
+            CREDENTIALS_PATH.parent.mkdir(parents=True, exist_ok=True)
+            CREDENTIALS_PATH.write_text(json.dumps(credentials, indent=2))
+            print("[agent] credentials pulled successfully")
+            return
+        except (urllib.error.URLError, OSError) as exc:
+            print(f"[agent] credentials pull attempt {attempt}: {exc}")
+            if attempt < 3:
+                time.sleep(2)
+
+    print("[agent] credentials pull failed after 3 attempts")
+
+
 if __name__ == "__main__":
+    _pull_credentials_on_start()
     print(f"[agent] starting on :{PORT}")
     HTTPServer(("0.0.0.0", PORT), Handler).serve_forever()
