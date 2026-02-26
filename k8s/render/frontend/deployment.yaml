@@ -1,0 +1,49 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: frontend
+  template:
+    metadata:
+      labels:
+        app: frontend
+    spec:
+      terminationGracePeriodSeconds: 30
+      nodeSelector:
+        yandex.cloud/node-group-id: catga1k31v5e7o01f40v
+      containers:
+      - name: frontend
+        image: cr.yandex/crpeksndl9pgl09rcn8p/jobsy-frontend:latest
+        ports:
+          - containerPort: 3000
+        env:
+          - name: TZ
+            value: "Africa/Abidjan"
+          - name: NEXT_PUBLIC_API_URL
+            value: "https://jobsyapi.poehali.dev"
+        envFrom:
+          - secretRef:
+              name: jobsy-frontend-env
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 3000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 3000
+          initialDelaySeconds: 15
+          periodSeconds: 10
+          timeoutSeconds: 3

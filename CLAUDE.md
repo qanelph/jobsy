@@ -137,6 +137,16 @@ frontend/
 - Background: token_refresh_loop() every 30min → refresh if <30min to expiry
 - Distribute: write .credentials.json to all RUNNING agent containers
 
+## Production (Yandex Cloud K8s)
+
+- **Namespace**: `jobsy`
+- **API (orchestrator)**: `https://jobsyapi.poehali.dev`
+- **Frontend**: `https://jobsy.poehali.dev`
+- **Registry**: `cr.yandex/crpeksndl9pgl09rcn8p/`
+- **Images**: `jobs-agent:latest`, `jobsy-orchestrator:latest`, `jobsy-frontend:latest`
+- **Build**: `docker buildx build --platform linux/amd64 --push` (ноды amd64, Mac arm64)
+- **K8s Service оркестратора (внутри кластера)**: `http://orchestrator-service`
+
 ## Development
 
 ```bash
