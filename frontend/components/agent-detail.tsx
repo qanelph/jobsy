@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { Eye, EyeOff, CircleHelp } from 'lucide-react'
+import { TelethonAuth } from '@/components/telethon-auth'
 import type { Agent, AgentConfig, AgentConfigField, UpdateAgentRequest } from '@/types/agent'
 import { useAgentsStore } from '@/store/agents'
 import { apiClient } from '@/lib/api'
@@ -529,6 +530,11 @@ export function AgentDetail({ agent, onDeleted }: AgentDetailProps) {
             </div>
           )}
         </div>
+
+        <div className="border-t border-line-faint" />
+
+        {/* Telethon userbot */}
+        <TelethonAuth agentId={agent.id} agentRunning={agent.status === 'running'} />
 
         <div className="border-t border-line-faint" />
 

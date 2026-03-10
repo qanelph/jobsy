@@ -46,3 +46,23 @@ export interface AgentConfigField {
 }
 
 export type AgentConfig = Record<string, AgentConfigField>
+
+// Telethon auth
+
+export type TelethonAuthPhase = 'idle' | 'qr_pending' | 'success' | 'error' | 'expired'
+
+export interface TelethonAuthStatus {
+  phase: TelethonAuthPhase
+  qr_url: string | null
+  error: string | null
+  phone: string | null
+  username: string | null
+  first_name: string | null
+}
+
+export interface TelethonSessionInfo {
+  has_session: boolean
+  phone: string | null
+  username: string | null
+  first_name: string | null
+}

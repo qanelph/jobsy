@@ -9,6 +9,7 @@ from pathlib import Path
 
 PORT = 8080
 CREDENTIALS_PATH = Path("/home/jobs/.claude/.credentials.json")
+SESSION_PATH = Path("/data/telethon.session")
 
 MASKED_KEYS = {"anthropic_api_key", "tg_api_hash", "tg_bot_token", "openai_api_key"}
 
@@ -29,7 +30,11 @@ class ConfigField:
 def _parse_int_list(raw: str) -> list[int]:
     if not raw:
         return []
-    return [int(x.strip()) for x in raw.split(",") if x.strip()]
+    # Support both JSON array "[1,2]" and CSV "1,2" formats
+    cleaned = raw.strip().strip("[]")
+    if not cleaned:
+        return []
+    return [int(x.strip()) for x in cleaned.split(",") if x.strip()]
 
 
 def _build_config() -> dict[str, ConfigField]:
@@ -86,6 +91,8 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(data)
         elif self.path == "/health":
             self._send_json({"status": "ok"})
+        elif self.path == "/session":
+            self._send_json({"has_session": SESSION_PATH.exists()})
         else:
             self._send_json({"error": "not found"}, 404)
 
@@ -104,6 +111,31 @@ class Handler(BaseHTTPRequestHandler):
                 return
             CREDENTIALS_PATH.parent.mkdir(parents=True, exist_ok=True)
             CREDENTIALS_PATH.write_text(json.dumps(credentials, indent=2))
+            self._send_json({"status": "ok"})
+        elif self.path == "/session":
+            if not self._check_auth():
+                return
+            length = int(self.headers.get("Content-Length", 0))
+            if not length:
+                self._send_json({"error": "empty body"}, 400)
+                return
+            body = json.loads(self.rfile.read(length))
+            session_string = body.get("session_string")
+            if not session_string:
+                self._send_json({"error": "missing 'session_string' field"}, 400)
+                return
+            SESSION_PATH.parent.mkdir(parents=True, exist_ok=True)
+            SESSION_PATH.write_bytes(session_string.encode("utf-8"))
+            self._send_json({"status": "ok"})
+        else:
+            self._send_json({"error": "not found"}, 404)
+
+    def do_DELETE(self) -> None:
+        if self.path == "/session":
+            if not self._check_auth():
+                return
+            if SESSION_PATH.exists():
+                SESSION_PATH.unlink()
             self._send_json({"status": "ok"})
         else:
             self._send_json({"error": "not found"}, 404)

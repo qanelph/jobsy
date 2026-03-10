@@ -28,8 +28,8 @@ spec:
         env:
           - name: TZ
             value: "Africa/Abidjan"
-          - name: NEXT_PUBLIC_API_URL
-            value: "https://jobsyapi.poehali.dev"
+          - name: API_URL
+            value: "http://orchestrator-service:8000"
         envFrom:
           - secretRef:
               name: jobsy-frontend-env

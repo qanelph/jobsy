@@ -7,6 +7,7 @@ import { useAgentsStore } from '@/store/agents'
 import { AgentList } from '@/components/agent-list'
 import { AgentDetail } from '@/components/agent-detail'
 import { ClaudePopover } from '@/components/claude-popover'
+import { TelegramPopover } from '@/components/telegram-popover'
 
 export default function HomePage() {
   const router = useRouter()
@@ -64,6 +65,7 @@ export default function HomePage() {
       <header className="flex items-center justify-between px-4 h-10 border-b border-line-faint shrink-0">
         <span className="font-mono text-sm text-text-bright tracking-tight">jobsy</span>
         <div className="flex items-center gap-4">
+          <TelegramPopover />
           <ClaudePopover />
           <button
             onClick={handleLogout}

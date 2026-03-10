@@ -1,10 +1,11 @@
 import axios, { type AxiosInstance, type AxiosError } from 'axios'
 import { authStorage } from './auth'
-import type { Agent, AgentConfig, CreateAgentRequest, UpdateAgentRequest } from '@/types/agent'
+import type { Agent, AgentConfig, CreateAgentRequest, UpdateAgentRequest, TelethonAuthStatus, TelethonSessionInfo } from '@/types/agent'
 import type { AuthResponse, TelegramUser } from '@/types/auth'
 import type { ClaudeAuthStatus, OAuthStartResponse } from '@/types/claude-auth'
+import type { PlatformSettings, PlatformSettingsUpdate } from '@/types/settings'
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+const API_URL = '/api'
 
 class ApiClient {
   private client: AxiosInstance
@@ -138,6 +139,44 @@ class ApiClient {
     await this.client.delete('/claude-auth')
   }
 
+  // Telethon Auth
+
+  async startTelethonQr(agentId: number): Promise<{ qr_url: string; expires_in: number }> {
+    const response = await this.client.post<{ qr_url: string; expires_in: number }>(`/agents/${agentId}/telethon/qr/start`)
+    return response.data
+  }
+
+  async getTelethonQrStatus(agentId: number): Promise<TelethonAuthStatus> {
+    const response = await this.client.get<TelethonAuthStatus>(`/agents/${agentId}/telethon/qr/status`)
+    return response.data
+  }
+
+  async confirmTelethonQr(agentId: number): Promise<TelethonSessionInfo> {
+    const response = await this.client.post<TelethonSessionInfo>(`/agents/${agentId}/telethon/qr/confirm`)
+    return response.data
+  }
+
+  async getTelethonSession(agentId: number): Promise<TelethonSessionInfo> {
+    const response = await this.client.get<TelethonSessionInfo>(`/agents/${agentId}/telethon/session`)
+    return response.data
+  }
+
+  async deleteTelethonSession(agentId: number): Promise<TelethonSessionInfo> {
+    const response = await this.client.delete<TelethonSessionInfo>(`/agents/${agentId}/telethon/session`)
+    return response.data
+  }
+
+  // Platform Settings
+
+  async getPlatformSettings(): Promise<PlatformSettings> {
+    const response = await this.client.get<PlatformSettings>('/settings')
+    return response.data
+  }
+
+  async updatePlatformSettings(data: PlatformSettingsUpdate): Promise<PlatformSettings> {
+    const response = await this.client.patch<PlatformSettings>('/settings', data)
+    return response.data
+  }
 }
 
 export const apiClient = new ApiClient()
