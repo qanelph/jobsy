@@ -42,6 +42,8 @@ async def list_versions(
         current_sha = status.orchestrator.current_sha
     elif component == "jobs":
         current_sha = status.agent.current_sha
+    elif component == "browser":
+        current_sha = status.browser.current_sha
     else:
         return {"versions": []}
     versions = await get_versions(component, current_sha)

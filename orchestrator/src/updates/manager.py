@@ -22,10 +22,12 @@ from .schemas import UpdateStatus
 logger = logging.getLogger(__name__)
 
 AGENT_IMAGE = "jobsyk/jobs-agent"
+BROWSER_IMAGE = "jobsyk/jobs-browser"
 ORCHESTRATOR_IMAGE = "jobsyk/jobsy-orchestrator"
 FRONTEND_IMAGE = "jobsyk/jobsy-frontend"
 
 ANNOTATION_SHA = "jobsy/commit-sha"
+ANNOTATION_BROWSER_SHA = "jobsy/browser-sha"
 
 
 def _init_k8s() -> None:
@@ -43,8 +45,8 @@ def _get_deployment_sha(apps: client.AppsV1Api, name: str, namespace: str) -> st
         return ""
 
 
-def _get_any_agent_sha(apps: client.AppsV1Api, namespace: str) -> str:
-    """Получить commit sha из аннотации любого agent deployment."""
+def _get_any_agent_annotation(apps: client.AppsV1Api, namespace: str, key: str) -> str:
+    """Получить аннотацию из любого agent deployment."""
     try:
         deps = apps.list_namespaced_deployment(
             namespace=namespace,
@@ -53,60 +55,72 @@ def _get_any_agent_sha(apps: client.AppsV1Api, namespace: str) -> str:
         )
         for dep in deps.items:
             annotations = dep.spec.template.metadata.annotations or {}
-            sha = annotations.get(ANNOTATION_SHA, "")
-            if sha:
-                return sha
+            val = annotations.get(key, "")
+            if val:
+                return val
         return ""
     except ApiException as e:
         logger.warning("K8s API error listing agent deployments: %s", e.reason)
         return ""
 
 
-async def check_all() -> UpdateStatus:
-    """Проверить обновления для всех трёх компонентов."""
-    namespace = settings.k8s_namespace
-
-    if settings.deployment_type == "k8s":
-        def _fetch_shas() -> tuple[str, str, str]:
-            _init_k8s()
-            apps = client.AppsV1Api()
-            return (
-                _get_any_agent_sha(apps, namespace),
-                _get_deployment_sha(apps, "orchestrator", namespace),
-                _get_deployment_sha(apps, "frontend", namespace),
-            )
-
-        agent_sha, orch_sha, front_sha = await asyncio.to_thread(_fetch_shas)
-    else:
-        agent_sha = orch_sha = front_sha = ""
-
-    agent_info = await checker.check(AGENT_IMAGE, agent_sha)
-    orch_info = await checker.check(ORCHESTRATOR_IMAGE, orch_sha)
-    front_info = await checker.check(FRONTEND_IMAGE, front_sha)
-
-    return UpdateStatus(agent=agent_info, orchestrator=orch_info, frontend=front_info)
-
-
-async def update_agents(db: AsyncSession) -> list[str]:
-    """Обновить образ всех running агентов (rolling restart)."""
-    if settings.deployment_type != "k8s":
-        return ["Update agents поддерживается только в K8s"]
-
-    namespace = settings.k8s_namespace
-    image = f"{AGENT_IMAGE}:latest"
-
-    # Получить latest sha из checker
-    tags = await checker._fetch_tags(AGENT_IMAGE)
+async def _get_latest_sha(image: str) -> str:
+    """Найти commit sha из sha-* тега, совпадающего с latest на Docker Hub."""
+    tags = await checker._fetch_tags(image)
     latest_digest = ""
     for tag in tags:
         if tag["name"] == "latest":
             latest_digest = tag["digest"]
             break
-    latest_sha = ""
     for tag in tags:
         if tag["name"].startswith("sha-") and tag["digest"] == latest_digest:
-            latest_sha = tag["name"][4:11]
-            break
+            return tag["name"][4:11]
+    return ""
+
+
+async def check_all() -> UpdateStatus:
+    """Проверить обновления для всех компонентов."""
+    namespace = settings.k8s_namespace
+
+    if settings.deployment_type == "k8s":
+        def _fetch_shas() -> tuple[str, str, str, str]:
+            _init_k8s()
+            apps = client.AppsV1Api()
+            return (
+                _get_any_agent_annotation(apps, namespace, ANNOTATION_SHA),
+                _get_any_agent_annotation(apps, namespace, ANNOTATION_BROWSER_SHA),
+                _get_deployment_sha(apps, "orchestrator", namespace),
+                _get_deployment_sha(apps, "frontend", namespace),
+            )
+
+        agent_sha, browser_sha, orch_sha, front_sha = await asyncio.to_thread(_fetch_shas)
+    else:
+        agent_sha = browser_sha = orch_sha = front_sha = ""
+
+    agent_info = await checker.check(AGENT_IMAGE, agent_sha)
+    browser_info = await checker.check(BROWSER_IMAGE, browser_sha)
+    orch_info = await checker.check(ORCHESTRATOR_IMAGE, orch_sha)
+    front_info = await checker.check(FRONTEND_IMAGE, front_sha)
+
+    return UpdateStatus(
+        agent=agent_info,
+        browser=browser_info,
+        orchestrator=orch_info,
+        frontend=front_info,
+    )
+
+
+async def update_agents(db: AsyncSession) -> list[str]:
+    """Обновить agent + browser образы всех running агентов (rolling restart)."""
+    if settings.deployment_type != "k8s":
+        return ["Update agents поддерживается только в K8s"]
+
+    namespace = settings.k8s_namespace
+    agent_image = f"{AGENT_IMAGE}:latest"
+    browser_image = f"{BROWSER_IMAGE}:latest"
+
+    agent_sha = await _get_latest_sha(AGENT_IMAGE)
+    browser_sha = await _get_latest_sha(BROWSER_IMAGE)
 
     result = await db.execute(
         select(Agent).where(Agent.status == AgentStatus.RUNNING)
@@ -129,18 +143,22 @@ async def update_agents(db: AsyncSession) -> list[str]:
                                 "metadata": {
                                     "annotations": {
                                         "jobsy/restart-at": datetime.datetime.utcnow().isoformat(),
-                                        ANNOTATION_SHA: latest_sha,
+                                        ANNOTATION_SHA: agent_sha,
+                                        ANNOTATION_BROWSER_SHA: browser_sha,
                                     }
                                 },
                                 "spec": {
-                                    "containers": [{"name": "agent", "image": image, "imagePullPolicy": "Always"}]
+                                    "containers": [
+                                        {"name": "agent", "image": agent_image, "imagePullPolicy": "Always"},
+                                        {"name": "browser", "image": browser_image, "imagePullPolicy": "Always"},
+                                    ]
                                 },
                             }
                         }
                     },
                 )
                 updated.append(f"{dep_name} ({agent.name})")
-                logger.info("Updated agent %s to %s (%s)", dep_name, image, latest_sha)
+                logger.info("Updated %s: agent=%s browser=%s", dep_name, agent_sha, browser_sha)
             except ApiException as e:
                 logger.error("Failed to update %s: %s", dep_name, e.reason)
         return updated
@@ -155,19 +173,9 @@ async def update_platform() -> list[str]:
 
     namespace = settings.k8s_namespace
 
-    # Получить latest sha для каждого компонента
     shas: dict[str, str] = {}
     for name, image in [("orchestrator", ORCHESTRATOR_IMAGE), ("frontend", FRONTEND_IMAGE)]:
-        tags = await checker._fetch_tags(image)
-        latest_digest = ""
-        for tag in tags:
-            if tag["name"] == "latest":
-                latest_digest = tag["digest"]
-                break
-        for tag in tags:
-            if tag["name"].startswith("sha-") and tag["digest"] == latest_digest:
-                shas[name] = tag["name"][4:11]
-                break
+        shas[name] = await _get_latest_sha(image)
 
     def _do_update() -> list[str]:
         _init_k8s()

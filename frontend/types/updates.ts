@@ -10,6 +10,7 @@ export interface ImageUpdateInfo {
 
 export interface UpdateStatus {
   agent: ImageUpdateInfo
+  browser: ImageUpdateInfo
   orchestrator: ImageUpdateInfo
   frontend: ImageUpdateInfo
 }

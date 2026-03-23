@@ -40,6 +40,7 @@ jobsy/
 | `jobsyk/jobsy-orchestrator` | Backend API (FastAPI) |
 | `jobsyk/jobsy-frontend` | Dashboard (Next.js) |
 | `jobsyk/jobs-agent` | AI-агент |
+| `jobsyk/jobs-browser` | Browser sidecar (Chromium + noVNC) |
 
 ## Deployment
 

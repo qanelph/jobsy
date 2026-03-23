@@ -16,6 +16,7 @@ class ImageUpdateInfo:
 @dataclass
 class UpdateStatus:
     agent: ImageUpdateInfo
+    browser: ImageUpdateInfo
     orchestrator: ImageUpdateInfo
     frontend: ImageUpdateInfo
 
