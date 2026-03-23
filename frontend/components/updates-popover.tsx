@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { RotateCw } from 'lucide-react'
 import { apiClient } from '@/lib/api'
-import type { UpdateStatus } from '@/types/updates'
+import type { UpdateStatus, VersionEntry } from '@/types/updates'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
 
 /* ── Progress ── */
@@ -39,6 +39,42 @@ function ProgressBar({ steps }: { steps: ProgressStep[] }) {
   )
 }
 
+/* ── Changelog ── */
+
+const MAX_CHANGELOG_ITEMS = 3
+
+function cleanTitle(title: string): string {
+  return title.replace(/^\[.*?]\s*/, '').trim()
+}
+
+function Changelog({ entries }: { entries: VersionEntry[] }) {
+  const items = entries
+    .filter(v => !v.is_current && v.pr_title)
+    .map(v => cleanTitle(v.pr_title))
+    .filter(Boolean)
+
+  if (items.length === 0) return null
+
+  const visible = items.slice(0, MAX_CHANGELOG_ITEMS)
+  const remaining = items.length - visible.length
+
+  return (
+    <div className="py-2 space-y-1">
+      {visible.map((title, i) => (
+        <div key={i} className="text-xs text-text-dim leading-relaxed">
+          <span className="text-text-dim mr-1.5">{'\u00B7'}</span>
+          {title}
+        </div>
+      ))}
+      {remaining > 0 && (
+        <div className="text-xs text-text-dim/50 ml-3.5">
+          {'и ещё'} {remaining}
+        </div>
+      )}
+    </div>
+  )
+}
+
 /* ── Main Popover ── */
 
 export function UpdatesPopover() {
@@ -48,6 +84,7 @@ export function UpdatesPopover() {
   const [steps, setSteps] = useState<ProgressStep[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [showReload, setShowReload] = useState(false)
+  const [changelog, setChangelog] = useState<VersionEntry[]>([])
   const healthPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const fetchStatus = useCallback(async () => {
@@ -56,6 +93,19 @@ export function UpdatesPopover() {
     try {
       const data = await apiClient.checkUpdates()
       setStatus(data)
+
+      // Load changelog from both components
+      const hasJobsUpdate = data.agent.has_update || data.browser.has_update
+      const hasJobsyUpdate = data.orchestrator.has_update || data.frontend.has_update
+      if (hasJobsUpdate || hasJobsyUpdate) {
+        const promises: Promise<VersionEntry[]>[] = []
+        if (hasJobsyUpdate) promises.push(apiClient.getVersions('jobsy').catch(() => []))
+        if (hasJobsUpdate) promises.push(apiClient.getVersions('jobs').catch(() => []))
+        const results = await Promise.all(promises)
+        setChangelog(results.flat())
+      } else {
+        setChangelog([])
+      }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -195,7 +245,7 @@ export function UpdatesPopover() {
           <div>
             {!steps && !showReload && (
               <>
-                <div className="flex items-center justify-between mb-2.5">
+                <div className="flex items-center justify-between">
                   <span className="text-sm text-text-main">Обновление доступно</span>
                   <button
                     onClick={fetchStatus}
@@ -205,10 +255,11 @@ export function UpdatesPopover() {
                     <RotateCw className="w-3.5 h-3.5" />
                   </button>
                 </div>
+                {changelog.length > 0 && <Changelog entries={changelog} />}
                 <button
                   onClick={handleUpdateAll}
                   disabled={isUpdating}
-                  className="w-full h-8 bg-copper hover:bg-copper/90 text-white text-sm font-medium rounded-md transition-colors disabled:opacity-40"
+                  className="w-full h-8 mt-1 bg-copper hover:bg-copper/90 text-white text-sm font-medium rounded-md transition-colors disabled:opacity-40"
                 >
                   Обновить
                 </button>
