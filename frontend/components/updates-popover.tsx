@@ -168,7 +168,7 @@ function UpdateRow({
           onClick={onShowVersions}
           className="flex items-center gap-1 text-xs text-text-dim hover:text-copper transition-colors font-mono"
         >
-          {info.current_sha || '·····'}
+          {info.current_sha || 'unknown'}
           {info.has_update && info.latest_sha && (
             <span className="text-copper">{'\u2192'} {info.latest_sha}</span>
           )}

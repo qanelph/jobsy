@@ -39,12 +39,12 @@ async def list_versions(
     """Список доступных версий (jobsy или jobs) с PR описаниями."""
     status = await manager.check_all()
     if component == "jobsy":
-        current_digest = status.orchestrator.current_digest
+        current_sha = status.orchestrator.current_sha
     elif component == "jobs":
-        current_digest = status.agent.current_digest
+        current_sha = status.agent.current_sha
     else:
         return {"versions": []}
-    versions = await get_versions(component, current_digest)
+    versions = await get_versions(component, current_sha)
     return {"versions": [asdict(v) for v in versions]}
 
 
