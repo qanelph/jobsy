@@ -4,6 +4,7 @@ import type { Agent, AgentConfig, CreateAgentRequest, UpdateAgentRequest, Teleth
 import type { AuthResponse, TelegramUser } from '@/types/auth'
 import type { ClaudeAuthStatus, OAuthStartResponse } from '@/types/claude-auth'
 import type { PlatformSettings, PlatformSettingsUpdate } from '@/types/settings'
+import type { UpdateStatus } from '@/types/updates'
 
 const API_URL = '/api'
 
@@ -175,6 +176,23 @@ class ApiClient {
 
   async updatePlatformSettings(data: PlatformSettingsUpdate): Promise<PlatformSettings> {
     const response = await this.client.patch<PlatformSettings>('/settings', data)
+    return response.data
+  }
+
+  // Updates
+
+  async checkUpdates(): Promise<UpdateStatus> {
+    const response = await this.client.get<UpdateStatus>('/updates/check')
+    return response.data
+  }
+
+  async updateAgents(): Promise<{ updated: string[] }> {
+    const response = await this.client.post<{ updated: string[] }>('/updates/agents')
+    return response.data
+  }
+
+  async updatePlatform(): Promise<{ updated: string[] }> {
+    const response = await this.client.post<{ updated: string[] }>('/updates/platform')
     return response.data
   }
 }

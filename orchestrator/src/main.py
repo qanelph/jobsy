@@ -14,6 +14,7 @@ from .config import settings
 from .config_manager import ConfigManager
 from .settings_routes import router as settings_router
 from .telethon_auth.routes import router as telethon_auth_router
+from .updates.routes import router as updates_router
 
 
 @asynccontextmanager
@@ -53,6 +54,7 @@ app.include_router(agents_router)
 app.include_router(claude_auth_router)
 app.include_router(settings_router)
 app.include_router(telethon_auth_router)
+app.include_router(updates_router)
 
 
 @app.get("/health")
