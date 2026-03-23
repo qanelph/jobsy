@@ -45,8 +45,8 @@ def _get_deployment_sha(apps: client.AppsV1Api, name: str, namespace: str) -> st
         return ""
 
 
-def _get_any_agent_annotation(apps: client.AppsV1Api, namespace: str, key: str) -> str:
-    """Получить аннотацию из любого agent deployment."""
+def _get_any_agent_annotations(apps: client.AppsV1Api, namespace: str, keys: list[str]) -> dict[str, str]:
+    """Получить несколько аннотаций из любого agent deployment за один запрос."""
     try:
         deps = apps.list_namespaced_deployment(
             namespace=namespace,
@@ -55,13 +55,11 @@ def _get_any_agent_annotation(apps: client.AppsV1Api, namespace: str, key: str) 
         )
         for dep in deps.items:
             annotations = dep.spec.template.metadata.annotations or {}
-            val = annotations.get(key, "")
-            if val:
-                return val
-        return ""
+            return {k: annotations.get(k, "") for k in keys}
+        return {k: "" for k in keys}
     except ApiException as e:
         logger.warning("K8s API error listing agent deployments: %s", e.reason)
-        return ""
+        return {k: "" for k in keys}
 
 
 async def _get_latest_sha(image: str) -> str:
@@ -86,9 +84,12 @@ async def check_all() -> UpdateStatus:
         def _fetch_shas() -> tuple[str, str, str, str]:
             _init_k8s()
             apps = client.AppsV1Api()
+            agent_annots = _get_any_agent_annotations(
+                apps, namespace, [ANNOTATION_SHA, ANNOTATION_BROWSER_SHA]
+            )
             return (
-                _get_any_agent_annotation(apps, namespace, ANNOTATION_SHA),
-                _get_any_agent_annotation(apps, namespace, ANNOTATION_BROWSER_SHA),
+                agent_annots[ANNOTATION_SHA],
+                agent_annots[ANNOTATION_BROWSER_SHA],
                 _get_deployment_sha(apps, "orchestrator", namespace),
                 _get_deployment_sha(apps, "frontend", namespace),
             )
@@ -97,10 +98,12 @@ async def check_all() -> UpdateStatus:
     else:
         agent_sha = browser_sha = orch_sha = front_sha = ""
 
-    agent_info = await checker.check(AGENT_IMAGE, agent_sha)
-    browser_info = await checker.check(BROWSER_IMAGE, browser_sha)
-    orch_info = await checker.check(ORCHESTRATOR_IMAGE, orch_sha)
-    front_info = await checker.check(FRONTEND_IMAGE, front_sha)
+    agent_info, browser_info, orch_info, front_info = await asyncio.gather(
+        checker.check(AGENT_IMAGE, agent_sha),
+        checker.check(BROWSER_IMAGE, browser_sha),
+        checker.check(ORCHESTRATOR_IMAGE, orch_sha),
+        checker.check(FRONTEND_IMAGE, front_sha),
+    )
 
     return UpdateStatus(
         agent=agent_info,
@@ -119,8 +122,10 @@ async def update_agents(db: AsyncSession) -> list[str]:
     agent_image = f"{AGENT_IMAGE}:latest"
     browser_image = f"{BROWSER_IMAGE}:latest"
 
-    agent_sha = await _get_latest_sha(AGENT_IMAGE)
-    browser_sha = await _get_latest_sha(BROWSER_IMAGE)
+    agent_sha, browser_sha = await asyncio.gather(
+        _get_latest_sha(AGENT_IMAGE),
+        _get_latest_sha(BROWSER_IMAGE),
+    )
 
     result = await db.execute(
         select(Agent).where(Agent.status == AgentStatus.RUNNING)

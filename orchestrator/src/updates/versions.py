@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 REPOS = {
     "jobsy": "qanelph/jobsy",
     "jobs": "qanelph/jobs",
+    "browser": "qanelph/jobs",
 }
 
 
