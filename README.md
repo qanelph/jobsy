@@ -31,6 +31,16 @@ jobsy/
 - Динамическое создание агентов в K8s
 - Ingress с wildcard роутингом для агентов
 
+## Docker Hub
+
+Публичные образы: [hub.docker.com/u/jobsyk](https://hub.docker.com/u/jobsyk)
+
+| Образ | Описание |
+|-------|----------|
+| `jobsyk/jobsy-orchestrator` | Backend API (FastAPI) |
+| `jobsyk/jobsy-frontend` | Dashboard (Next.js) |
+| `jobsyk/jobs-agent` | AI-агент |
+
 ## Deployment
 
 ### Docker Compose (локальная разработка)
@@ -41,7 +51,15 @@ docker-compose up -d
 
 ### Kubernetes (production)
 ```bash
-kubectl apply -f k8s/render/ -n jobs
+# Настроить переменные
+export ENV_NAME=prod
+export PLATFORM_DOMAIN=your-domain.example.com
+export CONTAINER_REGISTRY=jobsyk
+export IMAGE_TAG=latest
+
+# Отрендерить и применить манифесты
+cd k8s && ./render.sh
+kubectl apply -f render/ -n jobs
 ```
 
 ## Возможности
@@ -55,8 +73,5 @@ kubectl apply -f k8s/render/ -n jobs
 
 ## Связь с проектом Jobs
 
-Orchestrator использует Docker образы из `/Users/qanelph/Code/jobs`:
-- `jobs:latest` - основной контейнер агента
-- `jobs-browser:latest` - браузер с noVNC
-
+Orchestrator спавнит агентов из образа `jobsyk/jobs-agent:latest` (исходники: `/Users/qanelph/Code/jobs`).
 Каждый агент получает свою изолированную среду с собственными credentials и данными.
