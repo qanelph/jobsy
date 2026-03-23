@@ -81,12 +81,12 @@ function Changelog({ entries }: { entries: VersionEntry[] }) {
           <div key={entry.sha}>
             <button
               onClick={() => canExpand && setOpenItem(isOpen ? null : entry.sha)}
-              className={`w-full text-left flex items-start gap-1.5 py-0.5 text-xs leading-relaxed transition-colors ${
+              className={`w-full text-left flex items-center gap-1.5 py-0.5 text-xs leading-snug transition-colors ${
                 canExpand ? 'hover:text-text-main cursor-pointer' : 'cursor-default'
               } ${isOpen ? 'text-text-main' : isInstalled ? 'text-text-dim/60' : 'text-text-dim'}`}
             >
-              <span className={`${dotColor} mt-px shrink-0 text-[10px]`}>{dot}</span>
-              <span className="flex-1">
+              <span className={`${dotColor} shrink-0 text-[10px]`}>{dot}</span>
+              <span className="flex-1 truncate">
                 {title}
                 {isCurrent && <span className="text-emerald-400/50 ml-1 text-[10px]">current</span>}
               </span>
@@ -158,7 +158,7 @@ function UpdateBlock({
             disabled={disabled}
             className="text-xs text-copper hover:underline disabled:opacity-40 transition-opacity"
           >
-            obновить
+            обновить
           </button>
         )}
       </div>
