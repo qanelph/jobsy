@@ -24,6 +24,8 @@ jobs:
           push: true
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          build-args: |
+            COMMIT_SHA=${{ github.sha }}
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/jobsy-orchestrator:latest
             ${{ secrets.DOCKERHUB_USERNAME }}/jobsy-orchestrator:sha-${{ github.sha }}
@@ -48,6 +50,8 @@ jobs:
           push: true
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          build-args: |
+            COMMIT_SHA=${{ github.sha }}
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/jobsy-frontend:latest
             ${{ secrets.DOCKERHUB_USERNAME }}/jobsy-frontend:sha-${{ github.sha }}
