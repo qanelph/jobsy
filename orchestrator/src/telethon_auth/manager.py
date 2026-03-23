@@ -1,6 +1,7 @@
 import asyncio
 import logging
 from dataclasses import dataclass, field
+from urllib.parse import urlparse
 
 from telethon import TelegramClient
 from telethon.errors import SessionPasswordNeededError
@@ -14,6 +15,22 @@ logger = logging.getLogger(__name__)
 
 QR_TIMEOUT_SEC = 30
 QR_MAX_ATTEMPTS = 6  # 6 * 30s = 3 min
+
+
+def _parse_http_proxy(url: str) -> tuple | None:
+    """Парсит HTTP_PROXY URL в формат Telethon: (type, addr, port, ..., username, password)."""
+    parsed = urlparse(url)
+    if not parsed.hostname or not parsed.port:
+        return None
+    import python_socks
+    return (
+        python_socks.ProxyType.HTTP,
+        parsed.hostname,
+        parsed.port,
+        True,
+        parsed.username,
+        parsed.password,
+    )
 
 
 @dataclass
@@ -50,11 +67,13 @@ class TelethonAuthManager:
         if not api_id or not api_hash:
             raise ValueError("TG_API_ID и TG_API_HASH не настроены в глобальных настройках")
 
+        proxy = _parse_http_proxy(settings.http_proxy) if settings.http_proxy else None
         client = TelegramClient(
             StringSession(), api_id, api_hash,
             device_model="arm64",
             system_version="23.5.0",
             app_version="1.36.0",
+            proxy=proxy,
         )
         await client.connect()
 
