@@ -98,10 +98,14 @@ class K8sSpawner:
         ]
 
         if agent.browser_enabled:
+            browser_env = []
+            if settings.http_proxy:
+                browser_env.append(client.V1EnvVar(name="HTTP_PROXY", value=settings.http_proxy))
             containers.append(
                 client.V1Container(
                     name="browser",
                     image=settings.browser_image,
+                    env=browser_env or None,
                     resources=client.V1ResourceRequirements(
                         requests={"cpu": "100m", "memory": "256Mi"},
                         limits={"cpu": "500m", "memory": "1Gi"},
