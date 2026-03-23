@@ -185,9 +185,9 @@ k8s/template/
 
 #### Ingress роутинг
 ```
-jobsy.poehali.dev              → frontend
-api.jobsy.poehali.dev          → orchestrator
-*.jobsy.poehali.dev            → wildcard для агентов
+${PLATFORM_DOMAIN}              → frontend
+jobsyapi.${PLATFORM_DOMAIN}    → orchestrator
+*.${PLATFORM_DOMAIN}           → wildcard для агентов
 ```
 
 #### Render скрипт
@@ -307,10 +307,10 @@ api.jobsy.poehali.dev          → orchestrator
 
 ### Production Deployment
 1. Собрать Docker образы
-2. Push в Yandex Container Registry
+2. Push в Docker Hub (или другой registry)
 3. Создать K8s namespace
 4. Применить манифесты
-5. Настроить DNS (jobsy.poehali.dev)
+5. Настроить DNS (${PLATFORM_DOMAIN} → Ingress IP)
 
 ### Фазы 2-4 (из плана)
 - ❌ Веб-чат с агентами (WebSocket)

@@ -95,9 +95,9 @@ GET    /auth/me             - Текущий пользователь
 
 **Ingress маршруты**:
 ```
-jobsy.poehali.dev           → frontend:80
-api.jobsy.poehali.dev       → orchestrator:80
-*.jobsy.poehali.dev         → wildcard для агентов
+${PLATFORM_DOMAIN}              → frontend:80
+jobsyapi.${PLATFORM_DOMAIN}    → orchestrator:80
+*.${PLATFORM_DOMAIN}           → wildcard для агентов
 ```
 
 **Статус**: Готов к деплою (требуется рендеринг + secrets)
@@ -170,7 +170,7 @@ open http://localhost:3000
 - [ ] Создать Secrets (postgres, orchestrator-env, frontend-env)
 - [ ] Отрендерить манифесты (`./render.sh`)
 - [ ] Применить манифесты (`kubectl apply -f render/`)
-- [ ] Настроить DNS (jobsy.poehali.dev → Ingress IP)
+- [ ] Настроить DNS (${PLATFORM_DOMAIN} → Ingress IP)
 - [ ] Проверить SSL сертификаты
 
 ---

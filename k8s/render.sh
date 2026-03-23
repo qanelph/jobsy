@@ -9,7 +9,7 @@ set -e
 required_vars=(
     "ENV_NAME"
     "PLATFORM_DOMAIN"
-    "CONTAINER_REGISTRY_ID"
+    "CONTAINER_REGISTRY"
     "IMAGE_TAG"
 )
 

@@ -26,7 +26,7 @@ spec:
                   number: 80
     
     # Orchestrator API
-    - host: api.${PLATFORM_DOMAIN}
+    - host: jobsyapi.${PLATFORM_DOMAIN}
       http:
         paths:
           - path: /

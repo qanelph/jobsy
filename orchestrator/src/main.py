@@ -10,6 +10,7 @@ from .agents.routes import router as agents_router
 from .auth.routes import router as auth_router
 from .claude_auth.routes import router as claude_auth_router
 from .claude_auth.background import token_refresh_loop
+from .config import settings
 from .config_manager import ConfigManager
 from .settings_routes import router as settings_router
 from .telethon_auth.routes import router as telethon_auth_router
@@ -40,7 +41,7 @@ app = FastAPI(
 # CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # В продакшене указать конкретные домены
+    allow_origins=["*"] if settings.cors_origin == "*" else [s.strip() for s in settings.cors_origin.split(",")],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

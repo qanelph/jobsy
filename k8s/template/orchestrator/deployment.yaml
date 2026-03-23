@@ -20,7 +20,7 @@ spec:
       terminationGracePeriodSeconds: 60
       containers:
       - name: orchestrator
-        image: cr.yandex/${CONTAINER_REGISTRY_ID}/jobsy-orchestrator:${IMAGE_TAG}
+        image: ${CONTAINER_REGISTRY}/jobsy-orchestrator:${IMAGE_TAG}
         ports:
           - containerPort: 8000
         env:
@@ -28,6 +28,8 @@ spec:
             value: "Africa/Abidjan"
           - name: DEPLOYMENT_TYPE
             value: "k8s"
+          - name: CORS_ORIGIN
+            value: "https://${PLATFORM_DOMAIN}"
         envFrom:
           - secretRef:
               name: ${ENV_NAME}-orchestrator-env

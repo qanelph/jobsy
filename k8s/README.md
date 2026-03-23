@@ -23,8 +23,8 @@ k8s/
 
 ```bash
 export ENV_NAME=prod
-export PLATFORM_DOMAIN=jobsy.poehali.dev
-export CONTAINER_REGISTRY_ID=your-registry-id
+export PLATFORM_DOMAIN=your-domain.example.com
+export CONTAINER_REGISTRY=jobsyk              # Docker Hub org, или cr.yandex/xxx для Yandex CR
 export IMAGE_TAG=latest
 ```
 
@@ -100,9 +100,9 @@ kubectl logs -n jobs deployment/orchestrator -f
 ### Ingress роутинг
 
 ```
-jobsy.poehali.dev              → frontend-service:80
-api.jobsy.poehali.dev          → orchestrator-service:80
-*.jobsy.poehali.dev            → agent-proxy-service:80 (для агентов)
+${PLATFORM_DOMAIN}              → frontend-service:80
+jobsyapi.${PLATFORM_DOMAIN}    → orchestrator-service:80
+*.${PLATFORM_DOMAIN}           → agent-proxy-service:80 (для агентов)
 ```
 
 ### Динамическое создание агентов
@@ -115,7 +115,7 @@ api.jobsy.poehali.dev          → orchestrator-service:80
 4. Создаёт Deployment с jobs контейнером (+ browser sidecar если нужен)
 5. Создаёт Service для агента
 6. Обновляет Ingress rule:
-   - `{agent-name}.jobsy.poehali.dev` → service агента
+   - `{agent-name}.${PLATFORM_DOMAIN}` → service агента
 
 ### RBAC
 
@@ -157,10 +157,10 @@ kubectl scale deployment frontend --replicas=2 -n jobs
 
 ```bash
 # Orchestrator
-curl https://api.jobsy.poehali.dev/health
+curl https://api.${PLATFORM_DOMAIN}/health
 
 # Frontend
-curl https://jobsy.poehali.dev
+curl https://${PLATFORM_DOMAIN}
 ```
 
 ### Логи

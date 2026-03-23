@@ -14,6 +14,7 @@ class ImmutableSettings(BaseSettings):
     jwt_algorithm: str = "HS256"
     docker_base_url: str = "unix:///var/run/docker.sock"
     deployment_type: str = "docker"
+    cors_origin: str = "*"
 
 
 @dataclass(frozen=True)

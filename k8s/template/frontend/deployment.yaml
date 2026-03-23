@@ -20,14 +20,14 @@ spec:
       terminationGracePeriodSeconds: 30
       containers:
       - name: frontend
-        image: cr.yandex/${CONTAINER_REGISTRY_ID}/jobsy-frontend:${IMAGE_TAG}
+        image: ${CONTAINER_REGISTRY}/jobsy-frontend:${IMAGE_TAG}
         ports:
           - containerPort: 3000
         env:
           - name: TZ
             value: "Africa/Abidjan"
-          - name: NEXT_PUBLIC_API_URL
-            value: "https://api.${PLATFORM_DOMAIN}"
+          - name: API_URL
+            value: "http://orchestrator-service"
         envFrom:
           - secretRef:
               name: ${ENV_NAME}-frontend-env
