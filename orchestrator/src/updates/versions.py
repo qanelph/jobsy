@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 REPOS = {
     "jobsy": "qanelph/jobsy",
     "jobs": "qanelph/jobs",
+    "browser": "qanelph/jobs",
 }
 
 
@@ -57,6 +58,8 @@ async def get_versions(component: str, current_sha: str) -> list[VersionEntry]:
         image = "jobsyk/jobsy-orchestrator"
     elif component == "jobs":
         image = "jobsyk/jobs-agent"
+    elif component == "browser":
+        image = "jobsyk/jobs-browser"
     else:
         return []
 

@@ -302,19 +302,33 @@ export function UpdatesPopover() {
 
   const isUpdating = steps !== null && steps.some(s => s.status === 'active')
 
+  // jobs = agent + browser combined
+  const jobsHasUpdate = status && (status.agent.has_update || status.browser.has_update)
+  const jobsSource = status?.agent.has_update ? status.agent : status?.browser.has_update ? status.browser : status?.agent
+  const jobsInfo: ImageUpdateInfo | null = status && jobsSource ? {
+    image: 'jobs',
+    current_digest: '',
+    latest_digest: '',
+    has_update: !!jobsHasUpdate,
+    current_sha: jobsSource.current_sha,
+    latest_sha: jobsSource.latest_sha,
+    last_checked: jobsSource.last_checked,
+  } : null
+
+  // jobsy = orchestrator + frontend combined
   const jobsyHasUpdate = status && (status.orchestrator.has_update || status.frontend.has_update)
   const jobsySource = status?.frontend.has_update ? status.frontend : status?.orchestrator
   const jobsyInfo: ImageUpdateInfo | null = status && jobsySource ? {
     image: 'jobsy',
-    current_digest: jobsySource.current_digest,
-    latest_digest: jobsySource.latest_digest,
+    current_digest: '',
+    latest_digest: '',
     has_update: !!jobsyHasUpdate,
     current_sha: jobsySource.current_sha,
     latest_sha: jobsySource.latest_sha,
     last_checked: jobsySource.last_checked,
   } : null
 
-  const hasAnyUpdate = status && (status.agent.has_update || jobsyHasUpdate)
+  const hasAnyUpdate = status && (jobsHasUpdate || jobsyHasUpdate)
 
   const dotColor = !status
     ? 'text-text-dim'
@@ -348,13 +362,15 @@ export function UpdatesPopover() {
                   onShowVersions={() => setVersionModal('jobsy')}
                   disabled={isUpdating}
                 />
+                {jobsInfo && (
                 <UpdateRow
                   label="jobs"
-                  info={status.agent}
+                  info={jobsInfo}
                   onUpdate={handleUpdateJobs}
                   onShowVersions={() => setVersionModal('jobs')}
                   disabled={isUpdating}
                 />
+                )}
                 {!steps && !showReload && (
                   <div className="pt-2 border-t border-line-faint">
                     <button
