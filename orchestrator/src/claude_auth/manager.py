@@ -1,3 +1,4 @@
+import asyncio
 import time
 import logging
 from typing import Optional
@@ -15,6 +16,9 @@ logger = logging.getLogger(__name__)
 
 # Рефрешим за 30 минут до экспайра
 REFRESH_BUFFER_MS = 30 * 60 * 1000
+
+# Lock для защиты от параллельных refresh (refresh_token одноразовый)
+_refresh_lock = asyncio.Lock()
 
 
 class ClaudeAuthManager:
@@ -117,27 +121,31 @@ class ClaudeAuthManager:
             await db.commit()
 
     async def refresh_if_needed(self, db: AsyncSession) -> bool:
-        """Проверяет экспайр и рефрешит если нужно. Возвращает True если рефрешнул."""
-        credential = await self._get_credential(db)
-        if not credential or credential.auth_mode != AuthMode.OAUTH:
-            return False
+        """Проверяет экспайр и рефрешит если нужно. Возвращает True если рефрешнул.
 
-        if not self._needs_refresh(credential):
-            return False
+        Lock защищает от параллельных refresh — refresh_token одноразовый.
+        """
+        async with _refresh_lock:
+            credential = await self._get_credential(db)
+            if not credential or credential.auth_mode != AuthMode.OAUTH:
+                return False
 
-        if not credential.refresh_token:
-            logger.warning("OAuth credential has no refresh_token, cannot refresh")
-            return False
+            if not self._needs_refresh(credential):
+                return False
 
-        tokens = await self.oauth_client.refresh_tokens(credential.refresh_token)
+            if not credential.refresh_token:
+                logger.warning("OAuth credential has no refresh_token, cannot refresh")
+                return False
 
-        credential.access_token = tokens["access_token"]
-        credential.refresh_token = tokens["refresh_token"]
-        credential.expires_at = tokens["expires_at"]
-        await db.commit()
+            tokens = await self.oauth_client.refresh_tokens(credential.refresh_token)
 
-        logger.info("OAuth tokens refreshed, new expires_at=%d", tokens["expires_at"])
-        return True
+            credential.access_token = tokens["access_token"]
+            credential.refresh_token = tokens["refresh_token"]
+            credential.expires_at = tokens["expires_at"]
+            await db.commit()
+
+            logger.info("OAuth tokens refreshed, new expires_at=%d", tokens["expires_at"])
+            return True
 
     async def get_agent_credentials(
         self, db: AsyncSession

@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter, Depends, Header, HTTPException, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -59,10 +61,18 @@ async def pull_credentials(
     authorization: str = Header(),
     db: AsyncSession = Depends(get_db),
 ) -> CredentialsPullResponse:
-    """Агент дёргает при старте — получает свежие credentials."""
+    """Агент дёргает при старте или при 401 — получает свежие credentials.
+
+    Автоматически рефрешит токен, если он истёк или скоро истечёт.
+    """
     expected = f"Bearer {settings.jwt_secret_key}"
     if authorization != expected:
         raise HTTPException(status_code=401, detail="Invalid token")
+
+    try:
+        await _manager.refresh_if_needed(db)
+    except Exception:
+        logging.getLogger(__name__).warning("Token refresh failed in pull_credentials", exc_info=True)
 
     credential = await _manager._get_credential(db)
     if not credential or not credential.access_token:

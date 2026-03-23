@@ -10,12 +10,13 @@ REFRESH_INTERVAL_SECONDS = 30 * 60  # 30 минут
 
 
 async def token_refresh_loop() -> None:
-    """Бесконечный цикл: каждые 30 мин проверяет экспайр, рефрешит, раздаёт."""
+    """Бесконечный цикл: проверяет экспайр, рефрешит, раздаёт.
+
+    Первая проверка — сразу при старте (токен мог истечь пока orchestrator был выключен).
+    """
     manager = ClaudeAuthManager()
 
     while True:
-        await asyncio.sleep(REFRESH_INTERVAL_SECONDS)
-
         try:
             async with async_session_maker() as db:
                 refreshed = await manager.refresh_if_needed(db)
@@ -26,3 +27,5 @@ async def token_refresh_loop() -> None:
                         logger.info("Background refresh: distributed to %d agents", count)
         except Exception:
             logger.exception("Error in token refresh loop")
+
+        await asyncio.sleep(REFRESH_INTERVAL_SECONDS)
