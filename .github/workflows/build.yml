@@ -7,7 +7,6 @@ on:
 jobs:
   orchestrator:
     runs-on: ubuntu-latest
-    if: contains(toJSON(github.event.commits.*.modified), 'orchestrator/') || contains(toJSON(github.event.commits.*.added), 'orchestrator/')
     steps:
       - uses: actions/checkout@v4
 
@@ -23,13 +22,14 @@ jobs:
           context: orchestrator
           platforms: linux/amd64
           push: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/jobsy-orchestrator:latest
             ${{ secrets.DOCKERHUB_USERNAME }}/jobsy-orchestrator:sha-${{ github.sha }}
 
   frontend:
     runs-on: ubuntu-latest
-    if: contains(toJSON(github.event.commits.*.modified), 'frontend/') || contains(toJSON(github.event.commits.*.added), 'frontend/')
     steps:
       - uses: actions/checkout@v4
 
@@ -46,6 +46,8 @@ jobs:
           file: frontend/Dockerfile.prod
           platforms: linux/amd64
           push: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/jobsy-frontend:latest
             ${{ secrets.DOCKERHUB_USERNAME }}/jobsy-frontend:sha-${{ github.sha }}
