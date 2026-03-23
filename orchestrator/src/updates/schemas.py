@@ -16,3 +16,13 @@ class UpdateStatus:
     agent: ImageUpdateInfo
     orchestrator: ImageUpdateInfo
     frontend: ImageUpdateInfo
+
+
+@dataclass
+class VersionEntry:
+    sha: str
+    tag: str
+    pr_title: str
+    pr_body: str
+    merged_at: str
+    is_current: bool

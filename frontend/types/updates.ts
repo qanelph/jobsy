@@ -11,3 +11,12 @@ export interface UpdateStatus {
   orchestrator: ImageUpdateInfo
   frontend: ImageUpdateInfo
 }
+
+export interface VersionEntry {
+  sha: string
+  tag: string
+  pr_title: string
+  pr_body: string
+  merged_at: string
+  is_current: boolean
+}
