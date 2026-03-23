@@ -5,19 +5,53 @@ import { apiClient } from '@/lib/api'
 import type { UpdateStatus, ImageUpdateInfo } from '@/types/updates'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
 
+interface ProgressStep {
+  label: string
+  status: 'pending' | 'active' | 'done' | 'error'
+}
+
+function ProgressBar({ steps }: { steps: ProgressStep[] }) {
+  return (
+    <div className="space-y-1 py-1">
+      {steps.map((step, i) => (
+        <div key={i} className="flex items-center gap-2">
+          <span className={`text-[10px] ${
+            step.status === 'done' ? 'text-emerald-400' :
+            step.status === 'active' ? 'text-copper animate-pulse' :
+            step.status === 'error' ? 'text-rose' :
+            'text-text-dim'
+          }`}>
+            {step.status === 'done' ? '\u25A0' :
+             step.status === 'active' ? '\u25A1' :
+             step.status === 'error' ? '\u25A0' :
+             '\u00B7'}
+          </span>
+          <span className={`text-[10px] ${
+            step.status === 'active' ? 'text-text-main' :
+            step.status === 'done' ? 'text-text-dim' :
+            step.status === 'error' ? 'text-rose' :
+            'text-text-dim'
+          }`}>
+            {step.label}
+          </span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 function UpdateRow({
   label,
   info,
   onUpdate,
-  updating,
+  disabled,
 }: {
   label: string
   info: ImageUpdateInfo
   onUpdate: () => void
-  updating: boolean
+  disabled: boolean
 }) {
   const color = info.has_update ? 'text-copper' : 'text-emerald-400'
-  // ■ filled = up to date, □ empty = update available
   const icon = info.has_update ? '\u25A1' : '\u25A0'
 
   return (
@@ -34,10 +68,10 @@ function UpdateRow({
       {info.has_update && (
         <button
           onClick={onUpdate}
-          disabled={updating}
+          disabled={disabled}
           className="text-[10px] text-copper hover:underline disabled:opacity-40"
         >
-          {updating ? '...' : 'обновить'}
+          обновить
         </button>
       )}
     </div>
@@ -48,9 +82,8 @@ export function UpdatesPopover() {
   const [open, setOpen] = useState(false)
   const [status, setStatus] = useState<UpdateStatus | null>(null)
   const [loading, setLoading] = useState(false)
-  const [updating, setUpdating] = useState<string | null>(null)
+  const [steps, setSteps] = useState<ProgressStep[] | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [result, setResult] = useState<string | null>(null)
 
   const fetchStatus = useCallback(async () => {
     setLoading(true)
@@ -67,44 +100,79 @@ export function UpdatesPopover() {
 
   useEffect(() => {
     if (open) {
-      setResult(null)
+      setSteps(null)
       fetchStatus()
     }
   }, [open, fetchStatus])
 
   const handleUpdateJobs = async () => {
-    setUpdating('jobs')
     setError(null)
-    setResult(null)
+    setSteps([
+      { label: 'отправка запроса', status: 'active' },
+      { label: 'обновление образов агентов', status: 'pending' },
+      { label: 'перезапуск агентов', status: 'pending' },
+      { label: 'проверка статуса', status: 'pending' },
+    ])
     try {
+      setSteps(s => s && [
+        { ...s[0], status: 'done' },
+        { ...s[1], status: 'active' },
+        { ...s[2], status: 'pending' },
+        { ...s[3], status: 'pending' },
+      ])
       const res = await apiClient.updateAgents()
-      setResult(`${res.updated.length} agent(s) updated`)
+      setSteps(s => s && [
+        { ...s[0], status: 'done' },
+        { ...s[1], status: 'done' },
+        { label: `перезапуск ${res.updated.length} агентов`, status: 'done' },
+        { ...s[3], status: 'active' },
+      ])
       await fetchStatus()
+      setSteps(s => s && s.map(st => ({ ...st, status: 'done' as const })))
+      setTimeout(() => setSteps(null), 3000)
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e))
-    } finally {
-      setUpdating(null)
+      setSteps(s => s && s.map(st =>
+        st.status === 'active' ? { ...st, status: 'error' as const } : st
+      ))
     }
   }
 
   const handleUpdateJobsy = async () => {
     if (!confirm('Jobsy будет перезапущена. Продолжить?')) return
-    setUpdating('jobsy')
     setError(null)
-    setResult(null)
+    setSteps([
+      { label: 'отправка запроса', status: 'active' },
+      { label: 'обновление frontend', status: 'pending' },
+      { label: 'обновление orchestrator', status: 'pending' },
+      { label: 'перезапуск сервисов', status: 'pending' },
+    ])
     try {
+      setSteps(s => s && [
+        { ...s[0], status: 'done' },
+        { ...s[1], status: 'active' },
+        { ...s[2], status: 'pending' },
+        { ...s[3], status: 'pending' },
+      ])
       await apiClient.updatePlatform()
-      setResult('jobsy restarting...')
+      setSteps([
+        { label: 'отправка запроса', status: 'done' },
+        { label: 'обновление frontend', status: 'done' },
+        { label: 'обновление orchestrator', status: 'done' },
+        { label: 'перезапуск сервисов — обновите страницу через 30 сек', status: 'active' },
+      ])
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e))
-    } finally {
-      setUpdating(null)
+      setSteps(s => s && s.map(st =>
+        st.status === 'active' ? { ...st, status: 'error' as const } : st
+      ))
     }
   }
 
+  const isUpdating = steps !== null && steps.some(s => s.status === 'active')
+
   // Combine orchestrator + frontend into one "jobsy" status
   const jobsyHasUpdate = status && (status.orchestrator.has_update || status.frontend.has_update)
-  // Show digest of whichever component has an update, or orchestrator by default
   const jobsySource = status?.frontend.has_update ? status.frontend : status?.orchestrator
   const jobsyInfo: ImageUpdateInfo | null = status && jobsySource ? {
     image: 'jobsy',
@@ -136,11 +204,6 @@ export function UpdatesPopover() {
               {error}
             </div>
           )}
-          {result && (
-            <div className="text-[10px] text-emerald-400 bg-emerald-400/10 rounded px-2 py-1">
-              {result}
-            </div>
-          )}
           {loading ? (
             <div className="text-text-dim text-xs text-center py-2">checking...</div>
           ) : status && jobsyInfo ? (
@@ -149,26 +212,33 @@ export function UpdatesPopover() {
                 label="jobsy"
                 info={jobsyInfo}
                 onUpdate={handleUpdateJobsy}
-                updating={updating === 'jobsy'}
+                disabled={isUpdating}
               />
               <UpdateRow
                 label="jobs"
                 info={status.agent}
                 onUpdate={handleUpdateJobs}
-                updating={updating === 'jobs'}
+                disabled={isUpdating}
               />
-              <div className="pt-1 border-t border-line-faint">
-                <button
-                  onClick={fetchStatus}
-                  disabled={loading}
-                  className="text-[10px] text-text-dim hover:text-text-main transition-colors"
-                >
-                  {loading ? '...' : 'проверить заново'}
-                </button>
-              </div>
+              {!steps && (
+                <div className="pt-1 border-t border-line-faint">
+                  <button
+                    onClick={fetchStatus}
+                    disabled={loading}
+                    className="text-[10px] text-text-dim hover:text-text-main transition-colors"
+                  >
+                    проверить заново
+                  </button>
+                </div>
+              )}
             </>
           ) : (
             <div className="text-text-dim text-xs text-center py-2">no data</div>
+          )}
+          {steps && (
+            <div className="pt-1 border-t border-line-faint">
+              <ProgressBar steps={steps} />
+            </div>
           )}
         </div>
       </PopoverContent>
