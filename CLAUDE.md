@@ -143,7 +143,7 @@ frontend/
 - **API (orchestrator)**: `https://jobsyapi.${PLATFORM_DOMAIN}`
 - **Frontend**: `https://${PLATFORM_DOMAIN}`
 - **Registry**: настраивается через `CONTAINER_REGISTRY` (по умолчанию Docker Hub: `jobsyk/`)
-- **Images**: `jobsy-orchestrator:latest`, `jobsy-frontend:latest`
+- **Images**: `jobsyk/jobsy-orchestrator:latest`, `jobsyk/jobsy-frontend:latest`, `jobsyk/jobs-agent:latest`, `jobsyk/jobs-browser:latest`
 - **Build**: `docker buildx build --platform linux/amd64 --push` (если ноды amd64, Mac arm64)
 - **K8s Service оркестратора (внутри кластера)**: `http://orchestrator-service`
 - **Деплой**: `cd k8s && ENV_NAME=prod PLATFORM_DOMAIN=... CONTAINER_REGISTRY=jobsyk IMAGE_TAG=latest ./render.sh`
