@@ -16,13 +16,20 @@ function UpdateRow({
   onUpdate: () => void
   updating: boolean
 }) {
+  const color = info.has_update ? 'text-copper' : 'text-emerald-400'
+  // ■ filled = up to date, □ empty = update available
+  const icon = info.has_update ? '\u25A1' : '\u25A0'
+
   return (
     <div className="flex items-center justify-between py-1">
       <div className="flex items-center gap-2">
-        <span className={info.has_update ? 'text-copper' : 'text-emerald-400'}>
-          {info.has_update ? '\u2191' : '\u2713'}
-        </span>
+        <span className={`text-[10px] ${color}`}>{icon}</span>
         <span className="text-xs text-text-main">{label}</span>
+        {info.current_digest && (
+          <span className="text-[10px] text-text-dim font-mono">
+            {info.current_digest.slice(7, 14)}
+          </span>
+        )}
       </div>
       {info.has_update && (
         <button
@@ -65,8 +72,8 @@ export function UpdatesPopover() {
     }
   }, [open, fetchStatus])
 
-  const handleUpdateAgents = async () => {
-    setUpdating('agents')
+  const handleUpdateJobs = async () => {
+    setUpdating('jobs')
     setError(null)
     setResult(null)
     try {
@@ -80,14 +87,14 @@ export function UpdatesPopover() {
     }
   }
 
-  const handleUpdatePlatform = async () => {
-    if (!confirm('Orchestrator и frontend будут перезапущены. Продолжить?')) return
-    setUpdating('platform')
+  const handleUpdateJobsy = async () => {
+    if (!confirm('Jobsy будет перезапущена. Продолжить?')) return
+    setUpdating('jobsy')
     setError(null)
     setResult(null)
     try {
       await apiClient.updatePlatform()
-      setResult('platform restarting...')
+      setResult('jobsy restarting...')
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -95,7 +102,17 @@ export function UpdatesPopover() {
     }
   }
 
-  const hasAnyUpdate = status && (status.agent.has_update || status.orchestrator.has_update || status.frontend.has_update)
+  // Combine orchestrator + frontend into one "jobsy" status
+  const jobsyHasUpdate = status && (status.orchestrator.has_update || status.frontend.has_update)
+  const jobsyInfo: ImageUpdateInfo | null = status ? {
+    image: 'jobsy',
+    current_digest: status.orchestrator.current_digest,
+    latest_digest: status.orchestrator.latest_digest,
+    has_update: !!jobsyHasUpdate,
+    last_checked: status.orchestrator.last_checked,
+  } : null
+
+  const hasAnyUpdate = status && (status.agent.has_update || jobsyHasUpdate)
 
   const dotColor = !status
     ? 'text-text-dim'
@@ -124,25 +141,19 @@ export function UpdatesPopover() {
           )}
           {loading ? (
             <div className="text-text-dim text-xs text-center py-2">checking...</div>
-          ) : status ? (
+          ) : status && jobsyInfo ? (
             <>
               <UpdateRow
-                label="agents"
+                label="jobsy"
+                info={jobsyInfo}
+                onUpdate={handleUpdateJobsy}
+                updating={updating === 'jobsy'}
+              />
+              <UpdateRow
+                label="jobs"
                 info={status.agent}
-                onUpdate={handleUpdateAgents}
-                updating={updating === 'agents'}
-              />
-              <UpdateRow
-                label="orchestrator"
-                info={status.orchestrator}
-                onUpdate={handleUpdatePlatform}
-                updating={updating === 'platform'}
-              />
-              <UpdateRow
-                label="frontend"
-                info={status.frontend}
-                onUpdate={handleUpdatePlatform}
-                updating={updating === 'platform'}
+                onUpdate={handleUpdateJobs}
+                updating={updating === 'jobs'}
               />
               <div className="pt-1 border-t border-line-faint">
                 <button

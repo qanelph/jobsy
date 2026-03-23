@@ -7,6 +7,7 @@ from kubernetes.client.exceptions import ApiException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..agents.k8s_spawner import AGENT_LABEL
 from ..agents.models import Agent, AgentStatus
 from ..config import settings
 from .checker import checker
@@ -27,17 +28,8 @@ def _get_k8s_apps() -> client.AppsV1Api:
 def _get_running_digest(apps: client.AppsV1Api, deployment: str, container: str, namespace: str) -> str:
     """Получить image digest запущенного deployment из pod status."""
     try:
-        dep = apps.read_namespaced_deployment(name=deployment, namespace=namespace)
-        image = ""
-        for c in dep.spec.template.spec.containers:
-            if c.name == container:
-                image = c.image or ""
-                break
-        # Если image содержит @sha256: — это digest
-        if "@sha256:" in image:
-            return image.split("@")[-1]
-        # Иначе берём из pod statuses
         core = client.CoreV1Api()
+        # Ищем поды по label selector deployment
         pods = core.list_namespaced_pod(
             namespace=namespace,
             label_selector=f"app={deployment}",
@@ -54,6 +46,25 @@ def _get_running_digest(apps: client.AppsV1Api, deployment: str, container: str,
         return ""
 
 
+def _get_any_agent_digest(namespace: str) -> str:
+    """Получить digest любого running агента по label app=jobsy-agent."""
+    try:
+        core = client.CoreV1Api()
+        pods = core.list_namespaced_pod(
+            namespace=namespace,
+            label_selector=f"app={AGENT_LABEL}",
+            limit=1,
+        )
+        for pod in pods.items:
+            for cs in (pod.status.container_statuses or []):
+                if cs.name == "agent" and cs.image_id:
+                    if "@" in cs.image_id:
+                        return cs.image_id.split("@")[-1]
+        return ""
+    except ApiException:
+        return ""
+
+
 async def check_all() -> UpdateStatus:
     """Проверить обновления для всех трёх компонентов."""
     namespace = settings.k8s_namespace
@@ -61,7 +72,7 @@ async def check_all() -> UpdateStatus:
 
     if settings.deployment_type == "k8s":
         apps = _get_k8s_apps()
-        agent_digest = _get_running_digest(apps, "agent-3", "agent", namespace)
+        agent_digest = _get_any_agent_digest(namespace)
         orch_digest = _get_running_digest(apps, "orchestrator", "orchestrator", namespace)
         front_digest = _get_running_digest(apps, "frontend", "frontend", namespace)
     else:
