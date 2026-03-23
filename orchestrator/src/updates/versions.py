@@ -8,7 +8,6 @@ from .schemas import VersionEntry
 
 logger = logging.getLogger(__name__)
 
-# GitHub repos для каждого компонента
 REPOS = {
     "jobsy": "qanelph/jobsy",
     "jobs": "qanelph/jobs",
@@ -16,7 +15,6 @@ REPOS = {
 
 
 async def _fetch_tags(image: str, limit: int = 20) -> list[dict]:
-    """Получить теги из Docker Hub, отсортированные по дате."""
     parts = image.split("/", 1)
     if len(parts) == 1:
         namespace, repo = "library", parts[0]
@@ -36,7 +34,6 @@ async def _fetch_tags(image: str, limit: int = 20) -> list[dict]:
 
 
 async def _fetch_pr_for_commit(repo: str, sha: str) -> dict | None:
-    """Найти merged PR для коммита через GitHub API."""
     url = f"https://api.github.com/repos/{repo}/commits/{sha}/pulls"
     try:
         async with httpx.AsyncClient(timeout=10) as client:
@@ -46,7 +43,6 @@ async def _fetch_pr_for_commit(repo: str, sha: str) -> dict | None:
             if resp.status_code != 200:
                 return None
             pulls = resp.json()
-            # Берём первый merged PR
             for pr in pulls:
                 if pr.get("merged_at"):
                     return pr
@@ -55,8 +51,8 @@ async def _fetch_pr_for_commit(repo: str, sha: str) -> dict | None:
         return None
 
 
-async def get_versions(component: str, current_digest: str) -> list[VersionEntry]:
-    """Список доступных версий для компонента (jobsy или jobs)."""
+async def get_versions(component: str, current_sha: str) -> list[VersionEntry]:
+    """Список доступных версий. current_sha — 7-символьный commit sha."""
     if component == "jobsy":
         image = "jobsyk/jobsy-orchestrator"
     elif component == "jobs":
@@ -67,33 +63,27 @@ async def get_versions(component: str, current_digest: str) -> list[VersionEntry
     repo = REPOS.get(component, "")
     tags = await _fetch_tags(image)
 
-    # Фильтруем только sha-* теги
     sha_tags = []
     for tag in tags:
         name = tag.get("name", "")
         if name.startswith("sha-"):
-            digest = ""
-            images = tag.get("images", [])
-            if images:
-                digest = images[0].get("digest", "")
             sha_tags.append({
-                "sha": name[4:],  # убираем "sha-"
+                "sha": name[4:],
                 "tag": name,
-                "digest": digest,
                 "updated": tag.get("last_updated", ""),
             })
 
-    # Для каждого тега получаем PR info
     versions: list[VersionEntry] = []
-    for t in sha_tags[:10]:  # макс 10 версий
+    for t in sha_tags[:10]:
+        short_sha = t["sha"][:7]
         pr = await _fetch_pr_for_commit(repo, t["sha"]) if repo else None
         versions.append(VersionEntry(
-            sha=t["sha"][:7],
+            sha=short_sha,
             tag=t["tag"],
-            pr_title=pr.get("title", t["sha"][:7]) if pr else t["sha"][:7],
+            pr_title=pr.get("title", short_sha) if pr else short_sha,
             pr_body=pr.get("body", "") if pr else "",
             merged_at=pr.get("merged_at", t["updated"]) if pr else t["updated"],
-            is_current=t["digest"] == current_digest,
+            is_current=short_sha == current_sha,
         ))
 
     return versions

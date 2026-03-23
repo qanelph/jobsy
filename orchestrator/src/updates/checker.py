@@ -1,4 +1,11 @@
-"""Docker Hub digest checker — сравнение текущего и latest образов."""
+"""Docker Hub update checker — сравнение по sha-тегам.
+
+K8s pod imageID и Docker Hub tag digest несовместимы для multi-arch images.
+Поэтому вместо сравнения digests мы:
+1. Из Docker Hub получаем sha-* тег, совпадающий с latest (= последний билд)
+2. Из K8s deployment аннотации читаем sha последнего применённого обновления
+3. Если аннотации нет — считаем что версия неизвестна (нужно обновление)
+"""
 
 import logging
 import time
@@ -13,12 +20,6 @@ logger = logging.getLogger(__name__)
 CACHE_TTL = 300  # 5 минут
 
 
-@dataclass
-class _CacheEntry:
-    info: ImageUpdateInfo
-    ts: float
-
-
 def _split_image(image: str) -> tuple[str, str]:
     parts = image.split("/", 1)
     if len(parts) == 1:
@@ -27,14 +28,18 @@ def _split_image(image: str) -> tuple[str, str]:
 
 
 @dataclass
-class DockerHubChecker:
-    """Проверяет наличие обновлений по digest из Docker Hub Registry API."""
+class _CacheEntry:
+    info: ImageUpdateInfo
+    ts: float
 
+
+@dataclass
+class DockerHubChecker:
     _cache: dict[str, _CacheEntry] = field(default_factory=dict, init=False)
     _tags_cache: dict[str, tuple[list[dict], float]] = field(default_factory=dict, init=False)
 
-    async def check(self, image: str, current_digest: str) -> ImageUpdateInfo:
-        """Сравнить current_digest с latest на Docker Hub. Кеширует на 5 мин."""
+    async def check(self, image: str, current_sha: str) -> ImageUpdateInfo:
+        """Сравнить current commit sha с latest sha на Docker Hub."""
         now = time.monotonic()
         cached = self._cache.get(image)
         if cached and now - cached.ts < CACHE_TTL:
@@ -42,33 +47,29 @@ class DockerHubChecker:
 
         tags = await self._fetch_tags(image)
 
-        # Найти latest digest
+        # Найти digest тега latest
         latest_digest = ""
-        latest_sha = ""
         for tag in tags:
             if tag["name"] == "latest":
                 latest_digest = tag["digest"]
                 break
 
-        # Найти sha-* тег для latest digest
+        # Найти sha-* тег с тем же digest что и latest
+        latest_sha = ""
         for tag in tags:
             if tag["name"].startswith("sha-") and tag["digest"] == latest_digest:
-                latest_sha = tag["name"][4:7]  # первые 7 символов коммита
+                latest_sha = tag["name"][4:11]  # первые 7 символов коммита
                 break
 
-        # Найти sha-* тег для current digest
-        current_sha = ""
-        for tag in tags:
-            if tag["name"].startswith("sha-") and tag["digest"] == current_digest:
-                current_sha = tag["name"][4:11]  # первые 7 символов коммита
-                break
-
-        has_update = bool(latest_digest and current_digest and latest_digest != current_digest)
+        has_update = bool(latest_sha and current_sha and latest_sha != current_sha)
+        # Если current_sha неизвестен а latest есть — тоже обновление
+        if not current_sha and latest_sha:
+            has_update = True
 
         info = ImageUpdateInfo(
             image=image,
-            current_digest=current_digest or "",
-            latest_digest=latest_digest or "",
+            current_digest="",
+            latest_digest=latest_digest,
             has_update=has_update,
             current_sha=current_sha,
             latest_sha=latest_sha,
@@ -77,7 +78,6 @@ class DockerHubChecker:
         return info
 
     async def _fetch_tags(self, image: str, limit: int = 50) -> list[dict]:
-        """Получить теги из Docker Hub с digest."""
         now = time.monotonic()
         cached = self._tags_cache.get(image)
         if cached and now - cached[1] < CACHE_TTL:
