@@ -79,7 +79,7 @@ export function UpdatesPopover() {
     try {
       const res = await apiClient.updateAgents()
       setResult(`${res.updated.length} agent(s) updated`)
-      fetchStatus()
+      await fetchStatus()
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -104,12 +104,14 @@ export function UpdatesPopover() {
 
   // Combine orchestrator + frontend into one "jobsy" status
   const jobsyHasUpdate = status && (status.orchestrator.has_update || status.frontend.has_update)
-  const jobsyInfo: ImageUpdateInfo | null = status ? {
+  // Show digest of whichever component has an update, or orchestrator by default
+  const jobsySource = status?.frontend.has_update ? status.frontend : status?.orchestrator
+  const jobsyInfo: ImageUpdateInfo | null = status && jobsySource ? {
     image: 'jobsy',
-    current_digest: status.orchestrator.current_digest,
-    latest_digest: status.orchestrator.latest_digest,
+    current_digest: jobsySource.current_digest,
+    latest_digest: jobsySource.latest_digest,
     has_update: !!jobsyHasUpdate,
-    last_checked: status.orchestrator.last_checked,
+    last_checked: jobsySource.last_checked,
   } : null
 
   const hasAnyUpdate = status && (status.agent.has_update || jobsyHasUpdate)
