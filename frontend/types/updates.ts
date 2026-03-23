@@ -22,4 +22,5 @@ export interface VersionEntry {
   pr_body: string
   merged_at: string
   is_current: boolean
+  pr_url: string
 }

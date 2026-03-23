@@ -29,3 +29,4 @@ class VersionEntry:
     pr_body: str
     merged_at: str
     is_current: bool
+    pr_url: str = ""

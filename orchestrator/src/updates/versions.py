@@ -87,6 +87,7 @@ async def get_versions(component: str, current_sha: str) -> list[VersionEntry]:
             pr_body=pr.get("body", "") if pr else "",
             merged_at=pr.get("merged_at", t["updated"]) if pr else t["updated"],
             is_current=short_sha == current_sha,
+            pr_url=pr.get("html_url", "") if pr else "",
         ))
 
     return versions
