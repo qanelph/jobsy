@@ -35,6 +35,9 @@ export function TelegramPopover() {
     }
   }, [])
 
+  // Check on mount (for dot color)
+  useEffect(() => { fetchSettings() }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     if (open) fetchSettings()
   }, [open, fetchSettings])

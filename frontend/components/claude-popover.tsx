@@ -27,6 +27,9 @@ export function ClaudePopover() {
     setLoading(false)
   }, [])
 
+  // Check on mount (for dot color)
+  useEffect(() => { fetchStatus() }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     if (open) fetchStatus()
   }, [open, fetchStatus])

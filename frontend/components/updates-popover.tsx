@@ -86,10 +86,7 @@ function Changelog({ entries }: { entries: VersionEntry[] }) {
               } ${isOpen ? 'text-text-main' : isInstalled ? 'text-text-dim/60' : 'text-text-dim'}`}
             >
               <span className={`${dotColor} shrink-0 text-[10px]`}>{dot}</span>
-              <span className="flex-1 truncate">
-                {title}
-                {isCurrent && <span className="text-emerald-400/50 ml-1 text-[10px]">current</span>}
-              </span>
+              <span className="flex-1 truncate">{title}</span>
               {canExpand && (
                 <ChevronDown className={`w-3 h-3 mt-0.5 shrink-0 text-text-dim/40 transition-transform duration-200 ${
                   isOpen ? 'rotate-180' : ''
@@ -152,7 +149,7 @@ function UpdateBlock({
     <div>
       <div className="flex items-center justify-between mb-0.5">
         <span className="text-xs text-text-dim uppercase tracking-wider">{label}</span>
-        {hasUpdate && (
+        {hasUpdate ? (
           <button
             onClick={onUpdate}
             disabled={disabled}
@@ -160,6 +157,8 @@ function UpdateBlock({
           >
             обновить
           </button>
+        ) : (
+          <span className="text-xs text-emerald-400/70">обновлений нет</span>
         )}
       </div>
       <Changelog entries={entries} />
@@ -200,6 +199,9 @@ export function UpdatesPopover() {
       setLoading(false)
     }
   }, [])
+
+  // Check on mount (for dot color) and on open (for fresh data)
+  useEffect(() => { fetchStatus() }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (open) {
