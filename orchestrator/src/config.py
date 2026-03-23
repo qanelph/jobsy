@@ -43,8 +43,8 @@ class MutableSettingsSchema(BaseModel):
     access_token_expire_minutes: int = Field(default=30, ge=1, le=10080)
     refresh_token_expire_days: int = Field(default=7, ge=1, le=365)
     telegram_bot_token: str = ""
-    agent_image: str = Field(default="jobs-agent:latest", min_length=1)
-    browser_image: str = Field(default="jobs-browser:latest", min_length=1)
+    agent_image: str = Field(default="jobsyk/jobs-agent:latest", min_length=1)
+    browser_image: str = Field(default="jobsyk/jobs-browser:latest", min_length=1)
     openai_api_key: str = ""
     http_proxy: str = ""
     timezone: str = Field(default="Europe/Moscow", min_length=1)
