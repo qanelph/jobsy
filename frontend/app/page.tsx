@@ -12,7 +12,11 @@ import { TelegramPopover } from '@/components/telegram-popover'
 export default function HomePage() {
   const router = useRouter()
   const { agents, fetchAgents, createAgent } = useAgentsStore()
-  const [selectedId, setSelectedId] = useState<number | null>(null)
+  const [selectedId, setSelectedId] = useState<number | null>(() => {
+    if (typeof window === 'undefined') return null
+    const saved = localStorage.getItem('jobsy:selectedAgentId')
+    return saved ? Number(saved) : null
+  })
   const [ready, setReady] = useState(false)
 
   useEffect(() => {
@@ -24,11 +28,18 @@ export default function HomePage() {
     fetchAgents()
   }, [router, fetchAgents])
 
-  // Auto-select first agent
+  // Persist selected agent to localStorage
   useEffect(() => {
-    if (agents.length > 0 && selectedId === null) {
-      setSelectedId(agents[0].id)
+    if (selectedId !== null) {
+      localStorage.setItem('jobsy:selectedAgentId', String(selectedId))
     }
+  }, [selectedId])
+
+  // Auto-select: saved agent if exists, otherwise first
+  useEffect(() => {
+    if (agents.length === 0) return
+    if (selectedId !== null && agents.some(a => a.id === selectedId)) return
+    setSelectedId(agents[0].id)
   }, [agents, selectedId])
 
   // Poll when any agent is in transitional state (creating)
