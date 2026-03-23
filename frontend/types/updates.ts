@@ -3,6 +3,8 @@ export interface ImageUpdateInfo {
   current_digest: string
   latest_digest: string
   has_update: boolean
+  current_sha: string
+  latest_sha: string
   last_checked: string
 }
 
