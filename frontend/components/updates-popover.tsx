@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { RotateCw } from 'lucide-react'
+import { RotateCw, ExternalLink, ChevronDown } from 'lucide-react'
 import { apiClient } from '@/lib/api'
 import type { UpdateStatus, VersionEntry } from '@/types/updates'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
@@ -15,7 +15,7 @@ interface ProgressStep {
 
 function ProgressBar({ steps }: { steps: ProgressStep[] }) {
   return (
-    <div className="space-y-1.5 pt-2">
+    <div className="space-y-1.5">
       {steps.map((step, i) => {
         const color =
           step.status === 'done' ? 'text-emerald-400' :
@@ -41,36 +41,112 @@ function ProgressBar({ steps }: { steps: ProgressStep[] }) {
 
 /* ── Changelog ── */
 
-const MAX_CHANGELOG_ITEMS = 3
+const INITIAL_VISIBLE = 3
 
 function cleanTitle(title: string): string {
   return title.replace(/^\[.*?]\s*/, '').trim()
 }
 
 function Changelog({ entries }: { entries: VersionEntry[] }) {
+  const [expanded, setExpanded] = useState(false)
+  const [openItem, setOpenItem] = useState<string | null>(null)
+
   const items = entries
     .filter(v => !v.is_current && v.pr_title)
-    .map(v => cleanTitle(v.pr_title))
-    .filter(Boolean)
+    .filter(v => cleanTitle(v.pr_title))
 
   if (items.length === 0) return null
 
-  const visible = items.slice(0, MAX_CHANGELOG_ITEMS)
-  const remaining = items.length - visible.length
+  const visible = expanded ? items : items.slice(0, INITIAL_VISIBLE)
+  const hasMore = items.length > INITIAL_VISIBLE
 
   return (
-    <div className="py-2 space-y-1">
-      {visible.map((title, i) => (
-        <div key={i} className="text-xs text-text-dim leading-relaxed">
-          <span className="text-text-dim mr-1.5">{'\u00B7'}</span>
-          {title}
-        </div>
-      ))}
-      {remaining > 0 && (
-        <div className="text-xs text-text-dim/50 ml-3.5">
-          {'и ещё'} {remaining}
-        </div>
+    <div className="py-1.5 space-y-0.5">
+      {visible.map((entry) => {
+        const title = cleanTitle(entry.pr_title)
+        const isOpen = openItem === entry.sha
+        const hasBody = !!entry.pr_body?.trim()
+        const canExpand = hasBody || entry.pr_url
+
+        return (
+          <div key={entry.sha}>
+            <button
+              onClick={() => canExpand && setOpenItem(isOpen ? null : entry.sha)}
+              className={`w-full text-left flex items-start gap-1.5 py-0.5 text-xs leading-relaxed transition-colors ${
+                canExpand ? 'hover:text-text-main cursor-pointer' : 'cursor-default'
+              } ${isOpen ? 'text-text-main' : 'text-text-dim'}`}
+            >
+              <span className="text-text-dim/60 mt-px shrink-0">{'\u00B7'}</span>
+              <span className="flex-1">{title}</span>
+              {canExpand && (
+                <ChevronDown className={`w-3 h-3 mt-0.5 shrink-0 text-text-dim/40 transition-transform duration-200 ${
+                  isOpen ? 'rotate-180' : ''
+                }`} />
+              )}
+            </button>
+            <div className={`overflow-hidden transition-all duration-200 ${
+              isOpen ? 'max-h-40 opacity-100' : 'max-h-0 opacity-0'
+            }`}>
+              <div className="ml-3 pl-2 border-l border-line-faint mb-1">
+                {hasBody && (
+                  <p className="text-[11px] text-text-dim/70 leading-relaxed whitespace-pre-wrap line-clamp-4">
+                    {entry.pr_body.trim()}
+                  </p>
+                )}
+                {entry.pr_url && (
+                  <a
+                    href={entry.pr_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-[11px] text-copper hover:underline mt-1"
+                  >
+                    <ExternalLink className="w-2.5 h-2.5" />
+                    GitHub
+                  </a>
+                )}
+              </div>
+            </div>
+          </div>
+        )
+      })}
+      {hasMore && (
+        <button
+          onClick={() => setExpanded(!expanded)}
+          className="text-xs text-text-dim/50 hover:text-text-dim ml-3 transition-colors"
+        >
+          {expanded ? 'свернуть' : `и ещё ${items.length - INITIAL_VISIBLE}`}
+        </button>
       )}
+    </div>
+  )
+}
+
+/* ── Update Block ── */
+
+function UpdateBlock({
+  label,
+  entries,
+  onUpdate,
+  disabled,
+}: {
+  label: string
+  entries: VersionEntry[]
+  onUpdate: () => void
+  disabled: boolean
+}) {
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-0.5">
+        <span className="text-xs text-text-dim uppercase tracking-wider">{label}</span>
+        <button
+          onClick={onUpdate}
+          disabled={disabled}
+          className="text-xs text-copper hover:underline disabled:opacity-40 transition-opacity"
+        >
+          обновить
+        </button>
+      </div>
+      <Changelog entries={entries} />
     </div>
   )
 }
@@ -84,7 +160,8 @@ export function UpdatesPopover() {
   const [steps, setSteps] = useState<ProgressStep[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [showReload, setShowReload] = useState(false)
-  const [changelog, setChangelog] = useState<VersionEntry[]>([])
+  const [jobsyChangelog, setJobsyChangelog] = useState<VersionEntry[]>([])
+  const [jobsChangelog, setJobsChangelog] = useState<VersionEntry[]>([])
   const healthPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const fetchStatus = useCallback(async () => {
@@ -94,18 +171,15 @@ export function UpdatesPopover() {
       const data = await apiClient.checkUpdates()
       setStatus(data)
 
-      // Load changelog from both components
       const hasJobsUpdate = data.agent.has_update || data.browser.has_update
       const hasJobsyUpdate = data.orchestrator.has_update || data.frontend.has_update
-      if (hasJobsUpdate || hasJobsyUpdate) {
-        const promises: Promise<VersionEntry[]>[] = []
-        if (hasJobsyUpdate) promises.push(apiClient.getVersions('jobsy').catch(() => []))
-        if (hasJobsUpdate) promises.push(apiClient.getVersions('jobs').catch(() => []))
-        const results = await Promise.all(promises)
-        setChangelog(results.flat())
-      } else {
-        setChangelog([])
-      }
+
+      const [jobsyVersions, jobsVersions] = await Promise.all([
+        hasJobsyUpdate ? apiClient.getVersions('jobsy').catch(() => []) : Promise.resolve([]),
+        hasJobsUpdate ? apiClient.getVersions('jobs').catch(() => []) : Promise.resolve([]),
+      ])
+      setJobsyChangelog(jobsyVersions)
+      setJobsChangelog(jobsVersions)
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -142,60 +216,44 @@ export function UpdatesPopover() {
 
   /* ── Update handlers ── */
 
-  const handleUpdateAll = async () => {
+  const handleUpdateJobs = async () => {
+    setError(null)
+    const s: ProgressStep[] = [
+      { label: 'обновление агентов', status: 'active' },
+      { label: 'проверка', status: 'pending' },
+    ]
+    setSteps([...s])
+    try {
+      await apiClient.updateAgents()
+      s[0].status = 'done'
+      s[1].status = 'active'
+      setSteps([...s])
+      await fetchStatus()
+      s[1].status = 'done'
+      setSteps([...s])
+      setTimeout(() => setSteps(null), 2500)
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e))
+      setSteps(s => s && s.map(st =>
+        st.status === 'active' ? { ...st, status: 'error' as const } : st
+      ))
+    }
+  }
+
+  const handleUpdateJobsy = async () => {
     setError(null)
     setShowReload(false)
-
-    const needsJobs = status && (status.agent.has_update || status.browser.has_update)
-    const needsJobsy = status && (status.orchestrator.has_update || status.frontend.has_update)
-
-    const allSteps: ProgressStep[] = []
-    if (needsJobs) {
-      allSteps.push({ label: 'обновление агентов', status: 'pending' })
-    }
-    if (needsJobsy) {
-      allSteps.push({ label: 'обновление платформы', status: 'pending' })
-    }
-    allSteps.push({ label: 'проверка', status: 'pending' })
-
-    if (allSteps.length === 1) {
-      allSteps.unshift({ label: 'обновление', status: 'pending' })
-    }
-
-    allSteps[0].status = 'active'
-    setSteps([...allSteps])
-
+    const s: ProgressStep[] = [
+      { label: 'обновление платформы', status: 'active' },
+      { label: 'ожидание перезапуска', status: 'pending' },
+    ]
+    setSteps([...s])
     try {
-      let stepIdx = 0
-
-      if (needsJobs) {
-        allSteps[stepIdx].status = 'active'
-        setSteps([...allSteps])
-        await apiClient.updateAgents()
-        allSteps[stepIdx].status = 'done'
-        stepIdx++
-      }
-
-      if (needsJobsy) {
-        allSteps[stepIdx].status = 'active'
-        setSteps([...allSteps])
-        await apiClient.updatePlatform()
-        allSteps[stepIdx].status = 'done'
-        stepIdx++
-      }
-
-      // Final check step
-      allSteps[stepIdx].status = 'active'
-      setSteps([...allSteps])
-
-      if (needsJobsy) {
-        pollHealthcheck()
-      } else {
-        await fetchStatus()
-        allSteps.forEach(s => s.status = 'done')
-        setSteps([...allSteps])
-        setTimeout(() => setSteps(null), 2500)
-      }
+      await apiClient.updatePlatform()
+      s[0].status = 'done'
+      s[1].status = 'active'
+      setSteps([...s])
+      pollHealthcheck()
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e))
       setSteps(s => s && s.map(st =>
@@ -205,10 +263,10 @@ export function UpdatesPopover() {
   }
 
   const isUpdating = steps !== null && steps.some(s => s.status === 'active')
-  const hasAnyUpdate = status && (
-    status.agent.has_update || status.browser.has_update ||
-    status.orchestrator.has_update || status.frontend.has_update
-  )
+
+  const jobsHasUpdate = status && (status.agent.has_update || status.browser.has_update)
+  const jobsyHasUpdate = status && (status.orchestrator.has_update || status.frontend.has_update)
+  const hasAnyUpdate = jobsHasUpdate || jobsyHasUpdate
 
   const dotColor = !status
     ? 'text-text-dim'
@@ -223,7 +281,7 @@ export function UpdatesPopover() {
           updates <span className={`${dotColor} transition-colors duration-500`}>{'\u25CF'}</span>
         </button>
       </PopoverTrigger>
-      <PopoverContent className="w-[260px] p-3">
+      <PopoverContent className="w-[280px] p-3">
         {error && (
           <div className="text-xs text-rose bg-rose/10 rounded px-2.5 py-1.5 break-all mb-2">
             {error}
@@ -245,8 +303,8 @@ export function UpdatesPopover() {
           <div>
             {!steps && !showReload && (
               <>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-text-main">Обновление доступно</span>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm text-text-main">Обновления</span>
                   <button
                     onClick={fetchStatus}
                     disabled={loading}
@@ -255,14 +313,25 @@ export function UpdatesPopover() {
                     <RotateCw className="w-3.5 h-3.5" />
                   </button>
                 </div>
-                {changelog.length > 0 && <Changelog entries={changelog} />}
-                <button
-                  onClick={handleUpdateAll}
-                  disabled={isUpdating}
-                  className="w-full h-8 mt-1 bg-copper hover:bg-copper/90 text-white text-sm font-medium rounded-md transition-colors disabled:opacity-40"
-                >
-                  Обновить
-                </button>
+
+                <div className="space-y-3">
+                  {jobsyHasUpdate && (
+                    <UpdateBlock
+                      label="платформа"
+                      entries={jobsyChangelog}
+                      onUpdate={handleUpdateJobsy}
+                      disabled={isUpdating}
+                    />
+                  )}
+                  {jobsHasUpdate && (
+                    <UpdateBlock
+                      label="агенты"
+                      entries={jobsChangelog}
+                      onUpdate={handleUpdateJobs}
+                      disabled={isUpdating}
+                    />
+                  )}
+                </div>
               </>
             )}
             {steps && <ProgressBar steps={steps} />}
