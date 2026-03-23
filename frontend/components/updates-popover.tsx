@@ -164,7 +164,10 @@ function UpdateRow({
           className="flex items-center gap-1 text-[10px] text-text-dim hover:text-copper transition-colors font-mono"
           title="показать версии"
         >
-          {info.current_digest ? info.current_digest.slice(7, 14) : '·····'}
+          {info.current_sha || (info.current_digest ? info.current_digest.slice(7, 14) : '·····')}
+          {info.has_update && info.latest_sha && (
+            <span className="text-copper">{'\u2192'} {info.latest_sha}</span>
+          )}
           <span className="text-[8px]">▾</span>
         </button>
       </div>
@@ -304,6 +307,8 @@ export function UpdatesPopover() {
     current_digest: jobsySource.current_digest,
     latest_digest: jobsySource.latest_digest,
     has_update: !!jobsyHasUpdate,
+    current_sha: jobsySource.current_sha,
+    latest_sha: jobsySource.latest_sha,
     last_checked: jobsySource.last_checked,
   } : null
 

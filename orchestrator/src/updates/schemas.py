@@ -8,6 +8,8 @@ class ImageUpdateInfo:
     current_digest: str
     latest_digest: str
     has_update: bool
+    current_sha: str = ""   # git commit sha (из тега sha-*)
+    latest_sha: str = ""    # git commit sha latest
     last_checked: datetime = field(default_factory=datetime.utcnow)
 
 
