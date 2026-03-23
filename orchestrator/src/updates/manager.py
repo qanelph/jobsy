@@ -17,6 +17,7 @@ from .schemas import ImageUpdateInfo, UpdateStatus
 
 logger = logging.getLogger(__name__)
 
+AGENT_IMAGE = "jobsyk/jobs-agent"
 ORCHESTRATOR_IMAGE = "jobsyk/jobsy-orchestrator"
 FRONTEND_IMAGE = "jobsyk/jobsy-frontend"
 
@@ -49,7 +50,7 @@ def _get_pod_digest(label_selector: str, container_name: str, namespace: str) ->
 async def check_all() -> UpdateStatus:
     """Проверить обновления для всех трёх компонентов."""
     namespace = settings.k8s_namespace
-    agent_image = settings.agent_image.split(":")[0]
+    agent_image = AGENT_IMAGE
 
     if settings.deployment_type == "k8s":
         def _fetch_digests() -> tuple[str, str, str]:
@@ -64,7 +65,7 @@ async def check_all() -> UpdateStatus:
     else:
         agent_digest = orch_digest = front_digest = ""
 
-    agent_info = await checker.check(agent_image, agent_digest)
+    agent_info = await checker.check(AGENT_IMAGE, agent_digest)
     orch_info = await checker.check(ORCHESTRATOR_IMAGE, orch_digest)
     front_info = await checker.check(FRONTEND_IMAGE, front_digest)
 
@@ -77,7 +78,7 @@ async def update_agents(db: AsyncSession) -> list[str]:
         return ["Update agents поддерживается только в K8s"]
 
     namespace = settings.k8s_namespace
-    image = settings.agent_image
+    image = f"{AGENT_IMAGE}:latest"
 
     result = await db.execute(
         select(Agent).where(Agent.status == AgentStatus.RUNNING)
