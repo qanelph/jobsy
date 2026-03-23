@@ -7,6 +7,7 @@
 import asyncio
 import datetime
 import logging
+import os
 
 from kubernetes import client, config
 from kubernetes.client.exceptions import ApiException
@@ -97,6 +98,11 @@ async def check_all() -> UpdateStatus:
         agent_sha, browser_sha, orch_sha, front_sha = await asyncio.to_thread(_fetch_shas)
     else:
         agent_sha = browser_sha = orch_sha = front_sha = ""
+
+    # Orchestrator knows its own SHA from build-time env var (more reliable than annotation)
+    env_sha = os.environ.get("COMMIT_SHA", "")
+    if env_sha:
+        orch_sha = env_sha[:7]
 
     agent_info, browser_info, orch_info, front_info = await asyncio.gather(
         checker.check(AGENT_IMAGE, agent_sha),

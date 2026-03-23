@@ -12,6 +12,8 @@ COPY alembic/ ./alembic/
 COPY alembic.ini .
 
 # Создание .env файла по умолчанию (будет переопределён в docker-compose)
+ARG COMMIT_SHA=""
+ENV COMMIT_SHA=${COMMIT_SHA}
 ENV DATABASE_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/jobsy
 ENV JWT_SECRET_KEY=change-me-in-production
 
