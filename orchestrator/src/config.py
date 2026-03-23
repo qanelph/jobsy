@@ -24,8 +24,8 @@ class MutableSettingsSnapshot:
     access_token_expire_minutes: int = 30
     refresh_token_expire_days: int = 7
     telegram_bot_token: str = ""
-    agent_image: str = "jobs-agent:latest"
-    browser_image: str = "jobs-browser:latest"
+    agent_image: str = "jobsyk/jobs-agent:latest"
+    browser_image: str = "jobsyk/jobs-browser:latest"
     openai_api_key: str = ""
     http_proxy: str = ""
     timezone: str = "Europe/Moscow"
@@ -68,8 +68,8 @@ class _MutableFromEnv(BaseSettings):
     access_token_expire_minutes: int = 30
     refresh_token_expire_days: int = 7
     telegram_bot_token: str = ""
-    agent_image: str = "jobs-agent:latest"
-    browser_image: str = "jobs-browser:latest"
+    agent_image: str = "jobsyk/jobs-agent:latest"
+    browser_image: str = "jobsyk/jobs-browser:latest"
     openai_api_key: str = ""
     http_proxy: str = ""
     timezone: str = "Europe/Moscow"
