@@ -51,7 +51,11 @@ function Changelog({ entries }: { entries: VersionEntry[] }) {
   const [expanded, setExpanded] = useState(false)
   const [openItem, setOpenItem] = useState<string | null>(null)
 
-  const items = entries.filter(v => v.pr_title && cleanTitle(v.pr_title))
+  const items = entries.filter(v => {
+    const title = cleanTitle(v.pr_title || '')
+    // Skip entries with no title or where title is just a commit hash
+    return title && !/^[0-9a-f]{7,}$/i.test(title)
+  })
   if (items.length === 0) return null
 
   // Find current index — everything at and after is "installed"
@@ -216,16 +220,28 @@ export function UpdatesPopover() {
 
   const pollHealthcheck = () => {
     if (healthPollRef.current) clearInterval(healthPollRef.current)
+    let attempts = 0
+    const maxAttempts = 40 // 40 × 3s = 2 min timeout
     healthPollRef.current = setInterval(async () => {
+      attempts++
       try {
         const resp = await fetch('/api/health')
         if (resp.ok) {
           if (healthPollRef.current) clearInterval(healthPollRef.current)
           setSteps(s => s && s.map(st => ({ ...st, status: 'done' as const })))
           setShowReload(true)
+          return
         }
       } catch {
         // still restarting
+      }
+      if (attempts >= maxAttempts) {
+        if (healthPollRef.current) clearInterval(healthPollRef.current)
+        setError('Сервер не отвечает после обновления. Попробуйте перезагрузить вручную.')
+        setSteps(s => s && s.map(st =>
+          st.status === 'active' ? { ...st, status: 'error' as const } : st
+        ))
+        setShowReload(true)
       }
     }, 3000)
   }
@@ -354,7 +370,7 @@ export function UpdatesPopover() {
             {showReload && (
               <button
                 onClick={() => window.location.reload()}
-                className="w-full h-8 text-sm text-center rounded-md bg-emerald-400/10 text-emerald-400 hover:bg-emerald-400/20 transition-colors"
+                className="w-full h-8 mt-3 text-sm text-center rounded-md bg-emerald-400/10 text-emerald-400 hover:bg-emerald-400/20 transition-colors"
               >
                 Перезагрузить
               </button>
