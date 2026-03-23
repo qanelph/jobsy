@@ -51,22 +51,31 @@ function Changelog({ entries }: { entries: VersionEntry[] }) {
   const [expanded, setExpanded] = useState(false)
   const [openItem, setOpenItem] = useState<string | null>(null)
 
-  const items = entries
-    .filter(v => !v.is_current && v.pr_title)
-    .filter(v => cleanTitle(v.pr_title))
-
+  const items = entries.filter(v => v.pr_title && cleanTitle(v.pr_title))
   if (items.length === 0) return null
+
+  // Find current index — everything at and after is "installed"
+  const currentIdx = items.findIndex(v => v.is_current)
 
   const visible = expanded ? items : items.slice(0, INITIAL_VISIBLE)
   const hasMore = items.length > INITIAL_VISIBLE
 
   return (
     <div className="py-1.5 space-y-0.5">
-      {visible.map((entry) => {
+      {visible.map((entry, idx) => {
         const title = cleanTitle(entry.pr_title)
         const isOpen = openItem === entry.sha
         const hasBody = !!entry.pr_body?.trim()
         const canExpand = hasBody || entry.pr_url
+
+        // Determine if this version is installed
+        const realIdx = expanded ? idx : idx // visible index maps to items index
+        const itemIdx = expanded ? idx : items.indexOf(entry)
+        const isInstalled = currentIdx >= 0 && itemIdx >= currentIdx
+        const isCurrent = entry.is_current
+
+        const dotColor = isInstalled ? 'text-emerald-400/70' : 'text-text-dim/40'
+        const dot = isInstalled ? '\u25A0' : '\u25A1'
 
         return (
           <div key={entry.sha}>
@@ -74,10 +83,13 @@ function Changelog({ entries }: { entries: VersionEntry[] }) {
               onClick={() => canExpand && setOpenItem(isOpen ? null : entry.sha)}
               className={`w-full text-left flex items-start gap-1.5 py-0.5 text-xs leading-relaxed transition-colors ${
                 canExpand ? 'hover:text-text-main cursor-pointer' : 'cursor-default'
-              } ${isOpen ? 'text-text-main' : 'text-text-dim'}`}
+              } ${isOpen ? 'text-text-main' : isInstalled ? 'text-text-dim/60' : 'text-text-dim'}`}
             >
-              <span className="text-text-dim/60 mt-px shrink-0">{'\u00B7'}</span>
-              <span className="flex-1">{title}</span>
+              <span className={`${dotColor} mt-px shrink-0 text-[10px]`}>{dot}</span>
+              <span className="flex-1">
+                {title}
+                {isCurrent && <span className="text-emerald-400/50 ml-1 text-[10px]">current</span>}
+              </span>
               {canExpand && (
                 <ChevronDown className={`w-3 h-3 mt-0.5 shrink-0 text-text-dim/40 transition-transform duration-200 ${
                   isOpen ? 'rotate-180' : ''
@@ -112,7 +124,7 @@ function Changelog({ entries }: { entries: VersionEntry[] }) {
       {hasMore && (
         <button
           onClick={() => setExpanded(!expanded)}
-          className="text-xs text-text-dim/50 hover:text-text-dim ml-3 transition-colors"
+          className="text-xs text-text-dim/50 hover:text-text-dim ml-3.5 transition-colors"
         >
           {expanded ? 'свернуть' : `и ещё ${items.length - INITIAL_VISIBLE}`}
         </button>
@@ -126,11 +138,13 @@ function Changelog({ entries }: { entries: VersionEntry[] }) {
 function UpdateBlock({
   label,
   entries,
+  hasUpdate,
   onUpdate,
   disabled,
 }: {
   label: string
   entries: VersionEntry[]
+  hasUpdate: boolean
   onUpdate: () => void
   disabled: boolean
 }) {
@@ -138,13 +152,15 @@ function UpdateBlock({
     <div>
       <div className="flex items-center justify-between mb-0.5">
         <span className="text-xs text-text-dim uppercase tracking-wider">{label}</span>
-        <button
-          onClick={onUpdate}
-          disabled={disabled}
-          className="text-xs text-copper hover:underline disabled:opacity-40 transition-opacity"
-        >
-          обновить
-        </button>
+        {hasUpdate && (
+          <button
+            onClick={onUpdate}
+            disabled={disabled}
+            className="text-xs text-copper hover:underline disabled:opacity-40 transition-opacity"
+          >
+            obновить
+          </button>
+        )}
       </div>
       <Changelog entries={entries} />
     </div>
@@ -171,12 +187,10 @@ export function UpdatesPopover() {
       const data = await apiClient.checkUpdates()
       setStatus(data)
 
-      const hasJobsUpdate = data.agent.has_update || data.browser.has_update
-      const hasJobsyUpdate = data.orchestrator.has_update || data.frontend.has_update
-
+      // Always load changelogs to show installed versions
       const [jobsyVersions, jobsVersions] = await Promise.all([
-        hasJobsyUpdate ? apiClient.getVersions('jobsy').catch(() => []) : Promise.resolve([]),
-        hasJobsUpdate ? apiClient.getVersions('jobs').catch(() => []) : Promise.resolve([]),
+        apiClient.getVersions('jobsy').catch(() => []),
+        apiClient.getVersions('jobs').catch(() => []),
       ])
       setJobsyChangelog(jobsyVersions)
       setJobsChangelog(jobsVersions)
@@ -219,7 +233,7 @@ export function UpdatesPopover() {
   const handleUpdateJobs = async () => {
     setError(null)
     const s: ProgressStep[] = [
-      { label: 'обновление агентов', status: 'active' },
+      { label: 'обновление jobs', status: 'active' },
       { label: 'проверка', status: 'pending' },
     ]
     setSteps([...s])
@@ -244,7 +258,7 @@ export function UpdatesPopover() {
     setError(null)
     setShowReload(false)
     const s: ProgressStep[] = [
-      { label: 'обновление платформы', status: 'active' },
+      { label: 'обновление jobsy', status: 'active' },
       { label: 'ожидание перезапуска', status: 'pending' },
     ]
     setSteps([...s])
@@ -264,8 +278,8 @@ export function UpdatesPopover() {
 
   const isUpdating = steps !== null && steps.some(s => s.status === 'active')
 
-  const jobsHasUpdate = status && (status.agent.has_update || status.browser.has_update)
-  const jobsyHasUpdate = status && (status.orchestrator.has_update || status.frontend.has_update)
+  const jobsHasUpdate = !!(status && (status.agent.has_update || status.browser.has_update))
+  const jobsyHasUpdate = !!(status && (status.orchestrator.has_update || status.frontend.has_update))
   const hasAnyUpdate = jobsHasUpdate || jobsyHasUpdate
 
   const dotColor = !status
@@ -299,12 +313,14 @@ export function UpdatesPopover() {
               <RotateCw className="w-3.5 h-3.5" />
             </button>
           </div>
-        ) : hasAnyUpdate ? (
+        ) : (
           <div>
             {!steps && !showReload && (
               <>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm text-text-main">Обновления</span>
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-sm text-text-main">
+                    {hasAnyUpdate ? 'Обновления' : 'Версии'}
+                  </span>
                   <button
                     onClick={fetchStatus}
                     disabled={loading}
@@ -315,22 +331,20 @@ export function UpdatesPopover() {
                 </div>
 
                 <div className="space-y-3">
-                  {jobsyHasUpdate && (
-                    <UpdateBlock
-                      label="платформа"
-                      entries={jobsyChangelog}
-                      onUpdate={handleUpdateJobsy}
-                      disabled={isUpdating}
-                    />
-                  )}
-                  {jobsHasUpdate && (
-                    <UpdateBlock
-                      label="агенты"
-                      entries={jobsChangelog}
-                      onUpdate={handleUpdateJobs}
-                      disabled={isUpdating}
-                    />
-                  )}
+                  <UpdateBlock
+                    label="jobsy"
+                    entries={jobsyChangelog}
+                    hasUpdate={jobsyHasUpdate}
+                    onUpdate={handleUpdateJobsy}
+                    disabled={isUpdating}
+                  />
+                  <UpdateBlock
+                    label="jobs"
+                    entries={jobsChangelog}
+                    hasUpdate={jobsHasUpdate}
+                    onUpdate={handleUpdateJobs}
+                    disabled={isUpdating}
+                  />
                 </div>
               </>
             )}
@@ -343,20 +357,6 @@ export function UpdatesPopover() {
                 Перезагрузить
               </button>
             )}
-          </div>
-        ) : (
-          <div className="flex items-center justify-between h-9">
-            <div className="flex items-center gap-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shrink-0" />
-              <span className="text-sm text-text-dim">актуально</span>
-            </div>
-            <button
-              onClick={fetchStatus}
-              disabled={loading}
-              className="text-text-dim hover:text-copper transition-colors"
-            >
-              <RotateCw className="w-3.5 h-3.5" />
-            </button>
           </div>
         )}
       </PopoverContent>
