@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { apiClient } from '@/lib/api'
-import type { UpdateStatus, ImageUpdateInfo } from '@/types/updates'
+import type { UpdateStatus, ImageUpdateInfo, VersionEntry } from '@/types/updates'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
 
 interface ProgressStep {
@@ -40,39 +40,114 @@ function ProgressBar({ steps }: { steps: ProgressStep[] }) {
   )
 }
 
+function VersionList({ component, onClose }: { component: string; onClose: () => void }) {
+  const [versions, setVersions] = useState<VersionEntry[] | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [expanded, setExpanded] = useState<string | null>(null)
+
+  useEffect(() => {
+    (async () => {
+      setLoading(true)
+      try {
+        const data = await apiClient.getVersions(component)
+        setVersions(data)
+      } catch {
+        setVersions([])
+      } finally {
+        setLoading(false)
+      }
+    })()
+  }, [component])
+
+  if (loading) {
+    return <div className="text-text-dim text-[10px] py-2 text-center">loading...</div>
+  }
+
+  if (!versions?.length) {
+    return <div className="text-text-dim text-[10px] py-2 text-center">нет данных</div>
+  }
+
+  return (
+    <div className="space-y-0.5 max-h-48 overflow-y-auto">
+      <div className="flex items-center justify-between pb-1">
+        <span className="text-[10px] text-text-dim">{component} versions</span>
+        <button onClick={onClose} className="text-[10px] text-text-dim hover:text-text-main">&times;</button>
+      </div>
+      {versions.map((v) => (
+        <div key={v.tag} className="group">
+          <button
+            onClick={() => setExpanded(expanded === v.sha ? null : v.sha)}
+            className="w-full flex items-center gap-2 py-0.5 text-left hover:bg-white/[0.03] rounded px-1 -mx-1"
+          >
+            <span className={`text-[10px] ${v.is_current ? 'text-emerald-400' : 'text-text-dim'}`}>
+              {v.is_current ? '\u25A0' : '\u25A1'}
+            </span>
+            <span className="text-[10px] font-mono text-copper">{v.sha}</span>
+            <span className="text-[10px] text-text-main truncate flex-1">{v.pr_title}</span>
+            <span className="text-[10px] text-text-dim shrink-0">
+              {v.sha === expanded ? '\u25B4' : '\u25BE'}
+            </span>
+          </button>
+          {expanded === v.sha && v.pr_body && (
+            <div className="ml-6 mr-1 mb-1 text-[10px] text-text-dim leading-relaxed whitespace-pre-wrap">
+              {v.pr_body}
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  )
+}
+
 function UpdateRow({
   label,
   info,
   onUpdate,
   disabled,
+  component,
 }: {
   label: string
   info: ImageUpdateInfo
   onUpdate: () => void
   disabled: boolean
+  component: string
 }) {
+  const [showVersions, setShowVersions] = useState(false)
   const color = info.has_update ? 'text-copper' : 'text-emerald-400'
   const icon = info.has_update ? '\u25A1' : '\u25A0'
 
   return (
-    <div className="flex items-center justify-between py-1">
-      <div className="flex items-center gap-2">
-        <span className={`text-[10px] ${color}`}>{icon}</span>
-        <span className="text-xs text-text-main">{label}</span>
-        {info.current_digest && (
-          <span className="text-[10px] text-text-dim font-mono">
-            {info.current_digest.slice(7, 14)}
-          </span>
+    <div>
+      <div className="flex items-center justify-between py-1">
+        <div className="flex items-center gap-2">
+          <span className={`text-[10px] ${color}`}>{icon}</span>
+          <span className="text-xs text-text-main">{label}</span>
+          {info.current_digest && (
+            <span className="text-[10px] text-text-dim font-mono">
+              {info.current_digest.slice(7, 14)}
+            </span>
+          )}
+          <button
+            onClick={() => setShowVersions(!showVersions)}
+            className="text-[10px] text-text-dim hover:text-text-main transition-colors"
+          >
+            {showVersions ? '\u25B4' : '\u25BE'}
+          </button>
+        </div>
+        {info.has_update && (
+          <button
+            onClick={onUpdate}
+            disabled={disabled}
+            className="text-[10px] text-copper hover:underline disabled:opacity-40"
+          >
+            обновить
+          </button>
         )}
       </div>
-      {info.has_update && (
-        <button
-          onClick={onUpdate}
-          disabled={disabled}
-          className="text-[10px] text-copper hover:underline disabled:opacity-40"
-        >
-          обновить
-        </button>
+      {showVersions && (
+        <div className="ml-2 border-l border-line-faint pl-2 mb-1">
+          <VersionList component={component} onClose={() => setShowVersions(false)} />
+        </div>
       )}
     </div>
   )
@@ -171,7 +246,6 @@ export function UpdatesPopover() {
 
   const isUpdating = steps !== null && steps.some(s => s.status === 'active')
 
-  // Combine orchestrator + frontend into one "jobsy" status
   const jobsyHasUpdate = status && (status.orchestrator.has_update || status.frontend.has_update)
   const jobsySource = status?.frontend.has_update ? status.frontend : status?.orchestrator
   const jobsyInfo: ImageUpdateInfo | null = status && jobsySource ? {
@@ -213,12 +287,14 @@ export function UpdatesPopover() {
                 info={jobsyInfo}
                 onUpdate={handleUpdateJobsy}
                 disabled={isUpdating}
+                component="jobsy"
               />
               <UpdateRow
                 label="jobs"
                 info={status.agent}
                 onUpdate={handleUpdateJobs}
                 disabled={isUpdating}
+                component="jobs"
               />
               {!steps && (
                 <div className="pt-1 border-t border-line-faint">
