@@ -50,6 +50,16 @@ async def list_versions(
     return {"versions": [asdict(v) for v in versions]}
 
 
+@router.get("/rollout")
+async def rollout_status(
+    db: AsyncSession = Depends(get_db),
+    _user: User = require_admin,
+) -> dict:
+    """Статус rollout для каждого агента (running/updating/error)."""
+    statuses = await manager.get_agent_rollout_status(db)
+    return {"agents": [asdict(s) for s in statuses]}
+
+
 @router.post("/platform")
 async def update_platform(
     _user: User = require_admin,

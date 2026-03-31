@@ -200,6 +200,11 @@ class ApiClient {
     const response = await this.client.get<{ versions: VersionEntry[] }>(`/updates/versions/${component}`)
     return response.data.versions
   }
+
+  async getRolloutStatus(): Promise<{ name: string; agent_id: number; status: string; ready: boolean }[]> {
+    const response = await this.client.get<{ agents: { name: string; agent_id: number; status: string; ready: boolean }[] }>('/updates/rollout')
+    return response.data.agents
+  }
 }
 
 export const apiClient = new ApiClient()

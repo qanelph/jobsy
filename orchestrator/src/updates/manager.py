@@ -18,7 +18,7 @@ from ..agents.k8s_spawner import AGENT_LABEL
 from ..agents.models import Agent, AgentStatus
 from ..config import settings
 from .checker import checker
-from .schemas import UpdateStatus
+from .schemas import AgentRolloutStatus, UpdateStatus
 
 logger = logging.getLogger(__name__)
 
@@ -224,3 +224,52 @@ async def update_platform() -> list[str]:
         return updated
 
     return await asyncio.to_thread(_do_update)
+
+
+async def get_agent_rollout_status(db: AsyncSession) -> list[AgentRolloutStatus]:
+    """Статус rollout для каждого агента."""
+    if settings.deployment_type != "k8s":
+        return []
+
+    namespace = settings.k8s_namespace
+
+    result = await db.execute(
+        select(Agent).where(Agent.status.in_([AgentStatus.RUNNING, AgentStatus.CREATING]))
+    )
+    agents = result.scalars().all()
+
+    def _fetch() -> list[AgentRolloutStatus]:
+        _init_k8s()
+        apps = client.AppsV1Api()
+
+        # Один запрос вместо N
+        deps_list = apps.list_namespaced_deployment(
+            namespace=namespace,
+            label_selector=f"app={AGENT_LABEL}",
+        )
+        deps_by_name = {d.metadata.name: d for d in deps_list.items}
+
+        statuses: list[AgentRolloutStatus] = []
+        for agent in agents:
+            dep_name = f"agent-{agent.id}"
+            dep = deps_by_name.get(dep_name)
+            if not dep:
+                statuses.append(AgentRolloutStatus(
+                    name=agent.name, agent_id=agent.id, status="error", ready=False,
+                ))
+                continue
+
+            spec_replicas = dep.spec.replicas or 1
+            ready_count = dep.status.ready_replicas or 0
+            updated_count = dep.status.updated_replicas or 0
+            is_ready = ready_count >= spec_replicas and updated_count >= spec_replicas
+
+            statuses.append(AgentRolloutStatus(
+                name=agent.name,
+                agent_id=agent.id,
+                status="running" if is_ready else "updating",
+                ready=is_ready,
+            ))
+        return statuses
+
+    return await asyncio.to_thread(_fetch)

@@ -215,6 +215,7 @@ export function UpdatesPopover() {
     }
     return () => {
       if (healthPollRef.current) clearInterval(healthPollRef.current)
+      rolloutPollRef.current.cancelled = true
     }
   }, [open, fetchStatus])
 
@@ -248,27 +249,48 @@ export function UpdatesPopover() {
 
   /* ── Update handlers ── */
 
+  const rolloutPollRef = useRef<{ cancelled: boolean }>({ cancelled: false })
+
   const handleUpdateJobs = async () => {
     setError(null)
-    const s: ProgressStep[] = [
-      { label: 'обновление jobs', status: 'active' },
-      { label: 'проверка', status: 'pending' },
-    ]
-    setSteps([...s])
+    setSteps([{ label: 'отправка обновления...', status: 'active' }])
+    const poll = { cancelled: false }
+    rolloutPollRef.current = poll
     try {
       await apiClient.updateAgents()
-      s[0].status = 'done'
-      s[1].status = 'active'
-      setSteps([...s])
-      await fetchStatus()
-      s[1].status = 'done'
-      setSteps([...s])
-      setTimeout(() => setSteps(null), 2500)
+
+      const maxAttempts = 40  // ~2 минуты
+      for (let i = 0; i < maxAttempts && !poll.cancelled; i++) {
+        try {
+          const agents = await apiClient.getRolloutStatus()
+          if (poll.cancelled) break
+          if (agents.length === 0) {
+            setSteps([{ label: 'обновление отправлено', status: 'done' }])
+            setTimeout(() => setSteps(null), 3000)
+            return
+          }
+          setSteps(agents.map(a => ({
+            label: a.name,
+            status: a.ready ? 'done' as const : 'active' as const,
+          })))
+          if (agents.every(a => a.ready)) {
+            await fetchStatus()
+            setTimeout(() => setSteps(null), 3000)
+            return
+          }
+        } catch {
+          // orchestrator may be restarting
+        }
+        await new Promise(r => setTimeout(r, 3000))
+      }
+      if (!poll.cancelled) setError('Таймаут ожидания rollout')
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : String(e))
-      setSteps(s => s && s.map(st =>
-        st.status === 'active' ? { ...st, status: 'error' as const } : st
-      ))
+      if (!poll.cancelled) {
+        setError(e instanceof Error ? e.message : String(e))
+        setSteps(s => s && s.map(st =>
+          st.status === 'active' ? { ...st, status: 'error' as const } : st
+        ))
+      }
     }
   }
 
