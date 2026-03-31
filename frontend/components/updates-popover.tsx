@@ -223,18 +223,25 @@ export function UpdatesPopover() {
     if (healthPollRef.current) clearInterval(healthPollRef.current)
     let attempts = 0
     const maxAttempts = 40 // 40 × 3s = 2 min timeout
+    let sawDown = false // ждём пока старый под умрёт, потом пока новый поднимется
     healthPollRef.current = setInterval(async () => {
       attempts++
       try {
-        const resp = await fetch('/api/health')
+        const resp = await fetch('/api/health', { signal: AbortSignal.timeout(2000) })
         if (resp.ok) {
+          if (!sawDown && attempts < 5) {
+            // Это ещё старый под отвечает — ждём пока упадёт
+            return
+          }
+          // Новый под поднялся
           if (healthPollRef.current) clearInterval(healthPollRef.current)
           setSteps(s => s && s.map(st => ({ ...st, status: 'done' as const })))
           setShowReload(true)
           return
         }
+        sawDown = true
       } catch {
-        // still restarting
+        sawDown = true // под упал — значит рестарт начался
       }
       if (attempts >= maxAttempts) {
         if (healthPollRef.current) clearInterval(healthPollRef.current)
