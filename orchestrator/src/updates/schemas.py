@@ -30,3 +30,11 @@ class VersionEntry:
     merged_at: str
     is_current: bool
     pr_url: str = ""
+
+
+@dataclass
+class AgentRolloutStatus:
+    name: str
+    agent_id: int
+    status: str  # running, updating, error
+    ready: bool

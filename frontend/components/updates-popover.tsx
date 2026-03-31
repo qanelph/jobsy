@@ -250,20 +250,34 @@ export function UpdatesPopover() {
 
   const handleUpdateJobs = async () => {
     setError(null)
-    const s: ProgressStep[] = [
-      { label: 'обновление jobs', status: 'active' },
-      { label: 'проверка', status: 'pending' },
-    ]
-    setSteps([...s])
+    setSteps([{ label: 'отправка обновления...', status: 'active' }])
     try {
       await apiClient.updateAgents()
-      s[0].status = 'done'
-      s[1].status = 'active'
-      setSteps([...s])
-      await fetchStatus()
-      s[1].status = 'done'
-      setSteps([...s])
-      setTimeout(() => setSteps(null), 2500)
+
+      // Поллим rollout статус каждого агента
+      const pollRollout = async () => {
+        const maxAttempts = 40  // ~2 минуты
+        for (let i = 0; i < maxAttempts; i++) {
+          try {
+            const agents = await apiClient.getRolloutStatus()
+            const steps: ProgressStep[] = agents.map(a => ({
+              label: a.name,
+              status: a.ready ? 'done' as const : 'active' as const,
+            }))
+            setSteps(steps)
+            if (agents.every(a => a.ready)) {
+              await fetchStatus()
+              setTimeout(() => setSteps(null), 3000)
+              return
+            }
+          } catch {
+            // orchestrator may be restarting
+          }
+          await new Promise(r => setTimeout(r, 3000))
+        }
+        setError('Таймаут ожидания rollout')
+      }
+      await pollRollout()
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e))
       setSteps(s => s && s.map(st =>

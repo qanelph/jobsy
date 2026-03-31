@@ -224,3 +224,50 @@ async def update_platform() -> list[str]:
         return updated
 
     return await asyncio.to_thread(_do_update)
+
+
+async def get_agent_rollout_status(db: AsyncSession) -> list[dict]:
+    """Статус rollout для каждого агента."""
+    if settings.deployment_type != "k8s":
+        return []
+
+    namespace = settings.k8s_namespace
+
+    result = await db.execute(
+        select(Agent).where(Agent.status.in_([AgentStatus.RUNNING, AgentStatus.CREATING]))
+    )
+    agents = result.scalars().all()
+
+    def _fetch() -> list[dict]:
+        _init_k8s()
+        apps = client.AppsV1Api()
+        statuses = []
+        for agent in agents:
+            dep_name = f"agent-{agent.id}"
+            try:
+                dep = apps.read_namespaced_deployment(name=dep_name, namespace=namespace)
+                spec_replicas = dep.spec.replicas or 1
+                ready = dep.status.ready_replicas or 0
+                updated = dep.status.updated_replicas or 0
+
+                if ready >= spec_replicas and updated >= spec_replicas:
+                    st = "running"
+                else:
+                    st = "updating"
+
+                statuses.append({
+                    "name": agent.name,
+                    "agent_id": agent.id,
+                    "status": st,
+                    "ready": ready >= spec_replicas,
+                })
+            except ApiException:
+                statuses.append({
+                    "name": agent.name,
+                    "agent_id": agent.id,
+                    "status": "error",
+                    "ready": False,
+                })
+        return statuses
+
+    return await asyncio.to_thread(_fetch)
