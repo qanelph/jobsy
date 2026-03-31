@@ -57,7 +57,7 @@ async def rollout_status(
 ) -> dict:
     """Статус rollout для каждого агента (running/updating/error)."""
     statuses = await manager.get_agent_rollout_status(db)
-    return {"agents": statuses}
+    return {"agents": [asdict(s) for s in statuses]}
 
 
 @router.post("/platform")

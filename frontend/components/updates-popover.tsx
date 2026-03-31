@@ -215,6 +215,7 @@ export function UpdatesPopover() {
     }
     return () => {
       if (healthPollRef.current) clearInterval(healthPollRef.current)
+      rolloutPollRef.current.cancelled = true
     }
   }, [open, fetchStatus])
 
@@ -248,41 +249,48 @@ export function UpdatesPopover() {
 
   /* ── Update handlers ── */
 
+  const rolloutPollRef = useRef<{ cancelled: boolean }>({ cancelled: false })
+
   const handleUpdateJobs = async () => {
     setError(null)
     setSteps([{ label: 'отправка обновления...', status: 'active' }])
+    const poll = { cancelled: false }
+    rolloutPollRef.current = poll
     try {
       await apiClient.updateAgents()
 
-      // Поллим rollout статус каждого агента
-      const pollRollout = async () => {
-        const maxAttempts = 40  // ~2 минуты
-        for (let i = 0; i < maxAttempts; i++) {
-          try {
-            const agents = await apiClient.getRolloutStatus()
-            const steps: ProgressStep[] = agents.map(a => ({
-              label: a.name,
-              status: a.ready ? 'done' as const : 'active' as const,
-            }))
-            setSteps(steps)
-            if (agents.every(a => a.ready)) {
-              await fetchStatus()
-              setTimeout(() => setSteps(null), 3000)
-              return
-            }
-          } catch {
-            // orchestrator may be restarting
+      const maxAttempts = 40  // ~2 минуты
+      for (let i = 0; i < maxAttempts && !poll.cancelled; i++) {
+        try {
+          const agents = await apiClient.getRolloutStatus()
+          if (poll.cancelled) break
+          if (agents.length === 0) {
+            setSteps([{ label: 'обновление отправлено', status: 'done' }])
+            setTimeout(() => setSteps(null), 3000)
+            return
           }
-          await new Promise(r => setTimeout(r, 3000))
+          setSteps(agents.map(a => ({
+            label: a.name,
+            status: a.ready ? 'done' as const : 'active' as const,
+          })))
+          if (agents.every(a => a.ready)) {
+            await fetchStatus()
+            setTimeout(() => setSteps(null), 3000)
+            return
+          }
+        } catch {
+          // orchestrator may be restarting
         }
-        setError('Таймаут ожидания rollout')
+        await new Promise(r => setTimeout(r, 3000))
       }
-      await pollRollout()
+      if (!poll.cancelled) setError('Таймаут ожидания rollout')
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : String(e))
-      setSteps(s => s && s.map(st =>
-        st.status === 'active' ? { ...st, status: 'error' as const } : st
-      ))
+      if (!poll.cancelled) {
+        setError(e instanceof Error ? e.message : String(e))
+        setSteps(s => s && s.map(st =>
+          st.status === 'active' ? { ...st, status: 'error' as const } : st
+        ))
+      }
     }
   }
 
