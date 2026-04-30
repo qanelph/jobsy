@@ -24,8 +24,19 @@ function parseSkillName(content: string): string | null {
   const fm = content.slice(3, end)
   for (const line of fm.split('\n')) {
     const trimmed = line.trim()
-    if (trimmed.startsWith('name:')) {
-      return trimmed.slice('name:'.length).trim() || null
+    const m = /^name\s*:\s*(.*)$/.exec(trimmed)
+    if (m) {
+      // Снять опциональные кавычки и комментарий, оставить голое имя.
+      let value = m[1].trim()
+      const hash = value.indexOf('#')
+      if (hash >= 0) value = value.slice(0, hash).trim()
+      if (
+        (value.startsWith('"') && value.endsWith('"')) ||
+        (value.startsWith("'") && value.endsWith("'"))
+      ) {
+        value = value.slice(1, -1)
+      }
+      return value || null
     }
   }
   return null
@@ -88,15 +99,23 @@ function SkillRow({ agentId, skill, selected, onToggle, onChanged }: SkillRowPro
 
   const downloadSingle = async (e: React.MouseEvent) => {
     e.stopPropagation()
-    const data = content ?? (await apiClient.getAgentSkill(agentId, skill.name)).content
-    downloadBlob(new Blob([data], { type: 'text/markdown' }), `${skill.name}.md`)
+    try {
+      const data = content ?? (await apiClient.getAgentSkill(agentId, skill.name)).content
+      downloadBlob(new Blob([data], { type: 'text/markdown' }), `${skill.name}.md`)
+    } catch (err) {
+      alert(`Не удалось скачать: ${err instanceof Error ? err.message : 'unknown'}`)
+    }
   }
 
   const deleteSingle = async (e: React.MouseEvent) => {
     e.stopPropagation()
     if (!confirm(`Удалить скилл "${skill.name}"?`)) return
-    await apiClient.deleteAgentSkill(agentId, skill.name)
-    onChanged()
+    try {
+      await apiClient.deleteAgentSkill(agentId, skill.name)
+      onChanged()
+    } catch (err) {
+      alert(`Не удалось удалить: ${err instanceof Error ? err.message : 'unknown'}`)
+    }
   }
 
   return (
@@ -235,17 +254,22 @@ export function AgentSkillsList({ agentId, agentRunning }: AgentSkillsListProps)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const agentsStore = useAgentsStore((s) => s.agents)
 
+  // Защита от race при быстром переключении агентов: каждый load инкрементит
+  // ticket, и устаревшие ответы игнорируются при setState.
+  const loadTicket = useRef(0)
+
   const load = async () => {
     if (!agentRunning) {
       setItems(null)
       return
     }
+    const my = ++loadTicket.current
     setLoading(true)
     setError(false)
     try {
       const data = await apiClient.listAgentSkills(agentId)
+      if (my !== loadTicket.current) return
       setItems(data.items)
-      // Очистим выбранное от удалённых
       setSelected((prev) => {
         const names = new Set(data.items.map((s) => s.name))
         const next = new Set<string>()
@@ -253,15 +277,20 @@ export function AgentSkillsList({ agentId, agentRunning }: AgentSkillsListProps)
         return next
       })
     } catch {
+      if (my !== loadTicket.current) return
       setItems(null)
       setError(true)
     } finally {
-      setLoading(false)
+      if (my === loadTicket.current) setLoading(false)
     }
   }
 
   useEffect(() => {
     load()
+    return () => {
+      // Инвалидируем in-flight load — его setState не пройдут.
+      loadTicket.current++
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [agentId, agentRunning])
 
@@ -282,59 +311,78 @@ export function AgentSkillsList({ agentId, agentRunning }: AgentSkillsListProps)
     }
   }
 
-  const downloadSelected = async () => {
-    if (selected.size === 0) return
-    const names = [...selected]
-    if (names.length === 1) {
-      const data = await apiClient.getAgentSkill(agentId, names[0])
-      downloadBlob(new Blob([data.content], { type: 'text/markdown' }), `${names[0]}.md`)
-      return
-    }
-    const blob = await apiClient.bulkExportSkills(agentId, names)
-    downloadBlob(blob, 'skills.zip')
-  }
-
-  const deleteSelected = async () => {
-    if (selected.size === 0) return
-    if (!confirm(`Удалить ${selected.size} скилл(а)?`)) return
-    setBusy('deleting')
+  const withBusy = async <T,>(label: string, fn: () => Promise<T>): Promise<T | undefined> => {
+    setBusy(label)
     try {
-      await Promise.all([...selected].map((n) => apiClient.deleteAgentSkill(agentId, n)))
-      await load()
+      return await fn()
+    } catch (err) {
+      alert(`Ошибка (${label}): ${err instanceof Error ? err.message : 'unknown'}`)
+      return undefined
     } finally {
       setBusy(null)
     }
   }
 
-  // Загрузка одного .md с обработкой 409
-  const uploadSingleMd = async (file: File) => {
-    const text = await file.text()
-    const name = parseSkillName(text) || file.name.replace(/\.md$/, '')
-    if (!isValidName(name)) {
-      alert(`Невалидное имя скилла: "${name}". Допустимы только буквы/цифры/_/-.`)
-      return
-    }
-    try {
-      await apiClient.putAgentSkill(agentId, name, text, false)
-    } catch (e) {
-      if (axios.isAxiosError(e) && e.response?.status === 409) {
-        if (!confirm(`Скилл "${name}" уже существует. Заменить?`)) return
-        await apiClient.putAgentSkill(agentId, name, text, true)
-      } else {
-        alert(`Ошибка загрузки: ${e instanceof Error ? e.message : 'unknown'}`)
+  const downloadSelected = () =>
+    withBusy('downloading', async () => {
+      if (selected.size === 0) return
+      const names = [...selected]
+      if (names.length === 1) {
+        const data = await apiClient.getAgentSkill(agentId, names[0])
+        downloadBlob(new Blob([data.content], { type: 'text/markdown' }), `${names[0]}.md`)
         return
       }
-    }
-    await load()
-  }
+      const blob = await apiClient.bulkExportSkills(agentId, names)
+      downloadBlob(blob, 'skills.zip')
+    })
+
+  const deleteSelected = () =>
+    withBusy('deleting', async () => {
+      if (selected.size === 0) return
+      if (!confirm(`Удалить ${selected.size} скилл(а)?`)) return
+      // allSettled — частичные удаления не должны откатывать остальные.
+      const results = await Promise.allSettled(
+        [...selected].map((n) => apiClient.deleteAgentSkill(agentId, n)),
+      )
+      await load()
+      const failed = results.filter((r) => r.status === 'rejected')
+      if (failed.length > 0) {
+        alert(`Не удалось удалить ${failed.length} скилл(ов). См. консоль для деталей.`)
+      }
+    })
+
+  // Загрузка одного .md с обработкой 409
+  const uploadSingleMd = (file: File) =>
+    withBusy('uploading', async () => {
+      const text = await file.text()
+      const name = parseSkillName(text) || file.name.replace(/\.md$/i, '')
+      if (!isValidName(name)) {
+        alert(`Невалидное имя скилла: "${name}". Допустимы только буквы/цифры/_/-.`)
+        return
+      }
+      try {
+        await apiClient.putAgentSkill(agentId, name, text, false)
+      } catch (e) {
+        if (axios.isAxiosError(e) && e.response?.status === 409) {
+          if (!confirm(`Скилл "${name}" уже существует. Заменить?`)) return
+          await apiClient.putAgentSkill(agentId, name, text, true)
+        } else {
+          throw e
+        }
+      }
+      await load()
+    })
 
   // Загрузка нескольких .md серией PUT с обработкой конфликтов
-  const uploadMultipleMd = async (files: File[]) => {
+  const uploadMultipleMd = (files: File[]) =>
+    withBusy('uploading', () => uploadMultipleMdImpl(files))
+
+  const uploadMultipleMdImpl = async (files: File[]) => {
     const results: SkillImportResult[] = []
     const contents = new Map<string, string>()
     for (const file of files) {
       const text = await file.text()
-      const name = parseSkillName(text) || file.name.replace(/\.md$/, '')
+      const name = parseSkillName(text) || file.name.replace(/\.md$/i, '')
       if (!isValidName(name)) {
         results.push({ name, status: 'error', error: 'invalid name' })
         continue
@@ -388,9 +436,8 @@ export function AgentSkillsList({ agentId, agentRunning }: AgentSkillsListProps)
     await load()
   }
 
-  const uploadZip = async (file: File) => {
-    setBusy('uploading')
-    try {
+  const uploadZip = (file: File) =>
+    withBusy('uploading', async () => {
       const resp = await apiClient.bulkImportSkills(agentId, file, false)
       setPendingImport({
         results: resp.results,
@@ -410,10 +457,7 @@ export function AgentSkillsList({ agentId, agentRunning }: AgentSkillsListProps)
         },
       })
       await load()
-    } finally {
-      setBusy(null)
-    }
-  }
+    })
 
   const onUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? [])
@@ -439,10 +483,9 @@ export function AgentSkillsList({ agentId, agentRunning }: AgentSkillsListProps)
   }
 
   // Скопировать выбранные в другого агента
-  const copyTo = async (dstAgentId: number) => {
-    if (selected.size === 0) return
-    setBusy('copying')
-    try {
+  const copyTo = (dstAgentId: number) =>
+    withBusy('copying', async () => {
+      if (selected.size === 0) return
       const blob = await apiClient.bulkExportSkills(agentId, [...selected])
       const file = new File([blob], 'skills.zip', { type: 'application/zip' })
       const resp = await apiClient.bulkImportSkills(dstAgentId, file, false)
@@ -462,10 +505,7 @@ export function AgentSkillsList({ agentId, agentRunning }: AgentSkillsListProps)
           })
         },
       })
-    } finally {
-      setBusy(null)
-    }
-  }
+    })
 
   if (!agentRunning) {
     return <div className="text-text-dim text-xs">доступно для запущенного агента</div>
