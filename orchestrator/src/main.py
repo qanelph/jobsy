@@ -15,6 +15,7 @@ from .config_manager import ConfigManager
 from .settings_routes import router as settings_router
 from .telethon_auth.routes import router as telethon_auth_router
 from .updates.routes import router as updates_router
+from .usage.background import usage_poll_loop
 
 
 @asynccontextmanager
@@ -27,8 +28,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         await ConfigManager.load_from_db(db)
 
     refresh_task = asyncio.create_task(token_refresh_loop())
+    usage_task = asyncio.create_task(usage_poll_loop())
     yield
-    refresh_task.cancel()
+    for t in (refresh_task, usage_task):
+        t.cancel()
+        try:
+            await t
+        except (asyncio.CancelledError, Exception):
+            pass
 
 
 app = FastAPI(

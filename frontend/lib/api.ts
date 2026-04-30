@@ -5,6 +5,7 @@ import type { AuthResponse, TelegramUser } from '@/types/auth'
 import type { ClaudeAuthStatus, OAuthStartResponse } from '@/types/claude-auth'
 import type { PlatformSettings, PlatformSettingsUpdate } from '@/types/settings'
 import type { UpdateStatus, VersionEntry } from '@/types/updates'
+import type { AgentUsageResponse, UsagePeriod, UsageSummaryResponse } from '@/types/usage'
 
 const API_URL = '/api'
 
@@ -204,6 +205,22 @@ class ApiClient {
   async getRolloutStatus(): Promise<{ name: string; agent_id: number; status: string; ready: boolean }[]> {
     const response = await this.client.get<{ agents: { name: string; agent_id: number; status: string; ready: boolean }[] }>('/updates/rollout')
     return response.data.agents
+  }
+
+  // Usage tracking
+
+  async getAgentUsage(id: number, period: UsagePeriod): Promise<AgentUsageResponse> {
+    const response = await this.client.get<AgentUsageResponse>(`/agents/${id}/usage`, {
+      params: { period },
+    })
+    return response.data
+  }
+
+  async getUsageSummary(period: UsagePeriod): Promise<UsageSummaryResponse> {
+    const response = await this.client.get<UsageSummaryResponse>('/agents/usage/summary', {
+      params: { period },
+    })
+    return response.data
   }
 }
 

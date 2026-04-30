@@ -1,17 +1,42 @@
 import json
-from typing import Any, Optional
+from datetime import datetime, timedelta, timezone
+from typing import Any, Literal, Optional
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth.dependencies import require_admin, require_any
 from ..auth.models import User
 from ..config import settings
 from ..database import get_db
-from .models import Agent, AgentStatus, GlobalConfig
-from .schemas import AgentCreate, AgentUpdate, AgentResponse, AgentListResponse, GlobalConfigResponse, GlobalConfigUpdate
+from ..utils.agent_host import agent_internal_host
+from .models import Agent, AgentStatus, AgentUsageSnapshot, GlobalConfig
+from .schemas import (
+    AgentCreate,
+    AgentListResponse,
+    AgentResponse,
+    AgentUpdate,
+    AgentUsageBucket,
+    AgentUsageResponse,
+    GlobalConfigResponse,
+    GlobalConfigUpdate,
+    UsageSnapshotItem,
+    UsageSummaryResponse,
+)
 from .manager import AgentManager
+
+PeriodLiteral = Literal["24h", "7d", "30d"]
+_PERIOD_TO_TIMEDELTA = {
+    "24h": timedelta(hours=24),
+    "7d": timedelta(days=7),
+    "30d": timedelta(days=30),
+}
+
+
+def _period_threshold(period: PeriodLiteral) -> datetime:
+    return datetime.now(timezone.utc) - _PERIOD_TO_TIMEDELTA[period]
 
 router = APIRouter(prefix="/agents", tags=["agents"])
 manager = AgentManager()
@@ -170,10 +195,7 @@ async def _proxy_to_agent(
     params: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """Проксировать запрос к HTTP API агента."""
-    if settings.deployment_type == "k8s":
-        host = f"agent-{agent.id}-svc"
-    else:
-        host = f"jobs-agent-{agent.id}"
+    host = agent_internal_host(agent)
     url = f"http://{host}:8080/config"
     headers = {"Authorization": f"Bearer {settings.jwt_secret_key}"}
 
@@ -213,3 +235,68 @@ async def patch_agent_settings(
     """Обновить конфигурацию запущенного агента (proxy к агенту)."""
     agent = await _get_running_agent(agent_id, db)
     return await _proxy_to_agent(agent, "PATCH", json_body=body)
+
+
+# --- Usage tracking ---
+
+
+@router.get("/usage/summary", response_model=UsageSummaryResponse)
+async def get_usage_summary(
+    period: PeriodLiteral = Query("7d"),
+    db: AsyncSession = Depends(get_db),
+    _user: User = require_admin,
+) -> UsageSummaryResponse:
+    """Сводный timeseries usage по всем активным (не deleted) агентам."""
+    threshold = _period_threshold(period)
+
+    agents_result = await db.execute(
+        select(Agent).where(Agent.status != AgentStatus.DELETED).order_by(Agent.id)
+    )
+    agents = agents_result.scalars().all()
+    if not agents:
+        return UsageSummaryResponse(period=period, agents=[])
+
+    snaps_result = await db.execute(
+        select(AgentUsageSnapshot)
+        .where(
+            AgentUsageSnapshot.agent_id.in_([a.id for a in agents]),
+            AgentUsageSnapshot.taken_at >= threshold,
+        )
+        .order_by(AgentUsageSnapshot.agent_id, AgentUsageSnapshot.taken_at)
+    )
+    by_agent: dict[int, list[UsageSnapshotItem]] = {a.id: [] for a in agents}
+    for snap in snaps_result.scalars().all():
+        by_agent[snap.agent_id].append(UsageSnapshotItem.model_validate(snap))
+
+    return UsageSummaryResponse(
+        period=period,
+        agents=[
+            AgentUsageBucket(agent_id=a.id, name=a.name, snapshots=by_agent[a.id])
+            for a in agents
+        ],
+    )
+
+
+@router.get("/{agent_id}/usage", response_model=AgentUsageResponse)
+async def get_agent_usage(
+    agent_id: int,
+    period: PeriodLiteral = Query("7d"),
+    db: AsyncSession = Depends(get_db),
+    _user: User = require_admin,
+) -> AgentUsageResponse:
+    """Кумулятивные snapshots для одного агента за выбранный период."""
+    agent = await db.get(Agent, agent_id)
+    if not agent:
+        raise HTTPException(status_code=404, detail="Агент не найден")
+
+    threshold = _period_threshold(period)
+    result = await db.execute(
+        select(AgentUsageSnapshot)
+        .where(
+            AgentUsageSnapshot.agent_id == agent_id,
+            AgentUsageSnapshot.taken_at >= threshold,
+        )
+        .order_by(AgentUsageSnapshot.taken_at)
+    )
+    snapshots = [UsageSnapshotItem.model_validate(s) for s in result.scalars().all()]
+    return AgentUsageResponse(agent_id=agent_id, period=period, snapshots=snapshots)

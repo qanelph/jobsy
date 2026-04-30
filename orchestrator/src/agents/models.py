@@ -2,7 +2,17 @@ from datetime import datetime
 from enum import Enum
 from typing import Optional
 
-from sqlalchemy import String, Integer, DateTime, Enum as SQLEnum, Text, Boolean
+from sqlalchemy import (
+    BigInteger,
+    Boolean,
+    DateTime,
+    Enum as SQLEnum,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
 
@@ -77,3 +87,28 @@ class Agent(Base):
         nullable=False
     )
     last_heartbeat: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class AgentUsageSnapshot(Base):
+    """Кумулятивный снимок токенов агента, снятый usage poller'ом."""
+
+    __tablename__ = "agent_usage_snapshots"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    agent_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("agents.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    taken_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+
+    input_tokens: Mapped[int] = mapped_column(BigInteger, default=0, nullable=False, server_default="0")
+    output_tokens: Mapped[int] = mapped_column(BigInteger, default=0, nullable=False, server_default="0")
+    cache_creation_input_tokens: Mapped[int] = mapped_column(BigInteger, default=0, nullable=False, server_default="0")
+    cache_read_input_tokens: Mapped[int] = mapped_column(BigInteger, default=0, nullable=False, server_default="0")
+    total_cost_usd: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    events_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False, server_default="0")
