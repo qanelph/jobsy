@@ -79,16 +79,10 @@ function delta(cur: number, prev: number): number {
   return cur >= prev ? cur - prev : Math.max(0, cur)
 }
 
+// Дельта существует только между парой snapshots. С одной точкой baseline
+// неизвестен — рисуем пусто, иначе абсолюты смешаются с дельтами в stacked.
 function snapshotsToDeltas(snaps: UsageSnapshot[]): DeltaRow[] {
-  if (snaps.length === 0) return []
-  if (snaps.length === 1) {
-    const s = snaps[0]
-    return [{
-      ts: s.taken_at,
-      tokens: s.input_tokens + s.output_tokens,
-      cache: s.cache_creation_input_tokens + s.cache_read_input_tokens,
-    }]
-  }
+  if (snaps.length < 2) return []
   const out: DeltaRow[] = []
   for (let i = 1; i < snaps.length; i++) {
     const prev = snaps[i - 1]

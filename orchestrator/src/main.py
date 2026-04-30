@@ -30,8 +30,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     refresh_task = asyncio.create_task(token_refresh_loop())
     usage_task = asyncio.create_task(usage_poll_loop())
     yield
-    refresh_task.cancel()
-    usage_task.cancel()
+    for t in (refresh_task, usage_task):
+        t.cancel()
+        try:
+            await t
+        except (asyncio.CancelledError, Exception):
+            pass
 
 
 app = FastAPI(

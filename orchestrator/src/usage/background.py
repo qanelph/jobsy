@@ -55,13 +55,15 @@ async def _fetch_agent_usage(
 def _payload_to_snapshot(agent_id: int, payload: dict[str, Any]) -> AgentUsageSnapshot:
     totals = payload.get("totals") or {}
     cost = totals.get("total_cost_usd")
+    # bool — наследник int в Python; явно отсекаем, чтобы True не записался как 1.0 USD.
+    is_cost_numeric = isinstance(cost, (int, float)) and not isinstance(cost, bool)
     return AgentUsageSnapshot(
         agent_id=agent_id,
         input_tokens=_nonneg_int(totals.get("input_tokens")),
         output_tokens=_nonneg_int(totals.get("output_tokens")),
         cache_creation_input_tokens=_nonneg_int(totals.get("cache_creation_input_tokens")),
         cache_read_input_tokens=_nonneg_int(totals.get("cache_read_input_tokens")),
-        total_cost_usd=float(cost) if isinstance(cost, (int, float)) else None,
+        total_cost_usd=float(cost) if is_cost_numeric else None,
         events_count=_nonneg_int(totals.get("events_count")),
     )
 
@@ -92,13 +94,16 @@ async def _poll_once() -> None:
         tasks = [_fetch_agent_usage(client, a, sem) for a in agents]
         payloads = await asyncio.gather(*tasks, return_exceptions=True)
 
+    persist_tasks: list[asyncio.Task] = []
     for agent, payload in zip(agents, payloads):
         if isinstance(payload, Exception):
             logger.warning("Usage fetch exception agent_id=%s: %s", agent.id, payload)
             continue
         if not payload:
             continue
-        await _persist_snapshot(agent.id, payload)
+        persist_tasks.append(asyncio.create_task(_persist_snapshot(agent.id, payload)))
+    if persist_tasks:
+        await asyncio.gather(*persist_tasks, return_exceptions=True)
 
 
 async def usage_poll_loop() -> None:
