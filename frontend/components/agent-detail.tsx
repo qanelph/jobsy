@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { Eye, EyeOff, CircleHelp } from 'lucide-react'
 import { TelethonAuth } from '@/components/telethon-auth'
 import { UsageChart } from '@/components/usage-chart'
+import { ScheduledTasksList } from '@/components/scheduled-tasks-list'
 import type { Agent, AgentConfig, AgentConfigField, AgentVersion, UpdateAgentRequest } from '@/types/agent'
 import type { UsagePeriod, UsageSnapshot } from '@/types/usage'
 import { useAgentsStore } from '@/store/agents'
@@ -697,6 +698,14 @@ export function AgentDetail({ agent, onDeleted }: AgentDetailProps) {
         <div>
           <label className="block text-text-dim text-xs mb-1.5">prompt</label>
           <textarea value={instructions} onChange={(e) => { setInstructions(e.target.value); setDirty(true) }} placeholder="инструкции для агента..." rows={4} className="w-full bg-panel border border-line-faint rounded px-3 py-2 text-sm text-text-main placeholder:text-text-dim focus:outline-none focus:border-line-subtle resize-y font-mono" />
+        </div>
+
+        <div className="border-t border-line-faint" />
+
+        {/* Scheduled tasks */}
+        <div className="space-y-2">
+          <label className="block text-text-dim text-xs">расписание</label>
+          <ScheduledTasksList agentId={agent.id} agentRunning={agent.status === 'running'} />
         </div>
 
         <div className="border-t border-line-faint" />

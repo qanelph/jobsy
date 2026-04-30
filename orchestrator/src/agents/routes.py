@@ -232,10 +232,11 @@ async def _proxy_to_agent(
     method: str,
     json_body: dict[str, Any] | None = None,
     params: dict[str, str] | None = None,
+    path: str = "/config",
 ) -> dict[str, Any]:
     """Проксировать запрос к HTTP API агента."""
     host = agent_internal_host(agent)
-    url = f"http://{host}:8080/config"
+    url = f"http://{host}:8080{path}"
     headers = {"Authorization": f"Bearer {settings.jwt_secret_key}"}
 
     try:
@@ -274,6 +275,17 @@ async def patch_agent_settings(
     """Обновить конфигурацию запущенного агента (proxy к агенту)."""
     agent = await _get_running_agent(agent_id, db)
     return await _proxy_to_agent(agent, "PATCH", json_body=body)
+
+
+@router.get("/{agent_id}/scheduled")
+async def get_agent_scheduled(
+    agent_id: int,
+    db: AsyncSession = Depends(get_db),
+    _user: User = require_any,
+) -> dict[str, Any]:
+    """Список scheduled-задач агента (proxy к агенту)."""
+    agent = await _get_running_agent(agent_id, db)
+    return await _proxy_to_agent(agent, "GET", path="/scheduled")
 
 
 # --- Usage tracking ---
