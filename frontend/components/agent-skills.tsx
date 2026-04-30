@@ -59,6 +59,15 @@ function downloadBlob(blob: Blob, filename: string) {
   setTimeout(() => URL.revokeObjectURL(url), 0)
 }
 
+// Кастомные чекбоксы под dark-палитру (нативные выглядят как белые квадраты).
+const CHECKBOX_CLASS =
+  'appearance-none w-3.5 h-3.5 rounded-sm bg-panel border border-line-subtle ' +
+  'checked:bg-copper checked:border-copper ' +
+  "relative checked:after:content-['✓'] checked:after:absolute checked:after:inset-0 " +
+  'checked:after:flex checked:after:items-center checked:after:justify-center ' +
+  'checked:after:text-[10px] checked:after:text-void checked:after:font-bold ' +
+  'focus:outline-none focus:ring-1 focus:ring-copper/40 transition-colors cursor-pointer'
+
 function statusBadge(status: SkillImportResult['status']): string {
   if (status === 'created') return 'text-emerald-400'
   if (status === 'replaced') return 'text-emerald-400'
@@ -126,7 +135,7 @@ function SkillRow({ agentId, skill, selected, onToggle, onChanged }: SkillRowPro
           checked={selected}
           onChange={onToggle}
           onClick={(e) => e.stopPropagation()}
-          className="mt-1 shrink-0 accent-copper"
+          className={`mt-1 shrink-0 ${CHECKBOX_CLASS}`}
         />
         <button
           type="button"
@@ -523,8 +532,20 @@ export function AgentSkillsList({ agentId, agentRunning }: AgentSkillsListProps)
   const hasItems = items && items.length > 0
   const allSelected = items && selected.size === items.length && items.length > 0
 
+  const nothingSelected = selected.size === 0
+  const openFilePicker = () => fileInputRef.current?.click()
+
   return (
     <div className="space-y-2">
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".md,.zip"
+        multiple
+        onChange={onUpload}
+        className="hidden"
+      />
+
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-2">
           {hasItems && (
@@ -533,25 +554,16 @@ export function AgentSkillsList({ agentId, agentRunning }: AgentSkillsListProps)
                 type="checkbox"
                 checked={!!allSelected}
                 onChange={toggleAll}
-                className="accent-copper"
+                className={CHECKBOX_CLASS}
               />
               {selected.size > 0 ? `выбрано: ${selected.size}` : 'выбрать все'}
             </label>
           )}
-          {!hasItems && <span className="text-text-dim text-xs">нет скиллов</span>}
         </div>
         <div className="flex items-center gap-1.5">
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".md,.zip"
-            multiple
-            onChange={onUpload}
-            className="hidden"
-          />
           <button
             type="button"
-            onClick={() => fileInputRef.current?.click()}
+            onClick={openFilePicker}
             disabled={!!busy}
             className="flex items-center gap-1 px-2 py-1 text-xs bg-hover hover:bg-hover/70 text-text-main rounded disabled:opacity-50"
             title="загрузить .md или .zip"
@@ -571,20 +583,20 @@ export function AgentSkillsList({ agentId, agentRunning }: AgentSkillsListProps)
         </div>
       </div>
 
-      {selected.size > 0 && (
+      {hasItems && (
         <div className="flex items-center gap-1.5 flex-wrap bg-hover/50 px-2 py-1.5 rounded text-xs">
           <button
             type="button"
             onClick={downloadSelected}
-            disabled={!!busy}
-            className="flex items-center gap-1 text-text-main hover:text-copper disabled:opacity-50"
+            disabled={!!busy || nothingSelected}
+            className="flex items-center gap-1 text-text-main hover:text-copper disabled:opacity-30"
           >
             <Download size={12} />
-            <span>скачать ({selected.size})</span>
+            <span>{nothingSelected ? 'скачать' : `скачать (${selected.size})`}</span>
           </button>
           <span className="text-text-dim">|</span>
           <CopyToMenu
-            disabled={!!busy || otherRunning.length === 0}
+            disabled={!!busy || nothingSelected || otherRunning.length === 0}
             agents={otherRunning}
             onSelect={copyTo}
           />
@@ -592,8 +604,8 @@ export function AgentSkillsList({ agentId, agentRunning }: AgentSkillsListProps)
           <button
             type="button"
             onClick={deleteSelected}
-            disabled={!!busy}
-            className="flex items-center gap-1 text-text-main hover:text-rose disabled:opacity-50"
+            disabled={!!busy || nothingSelected}
+            className="flex items-center gap-1 text-text-main hover:text-rose disabled:opacity-30"
           >
             <Trash2 size={12} />
             <span>удалить</span>
@@ -601,7 +613,7 @@ export function AgentSkillsList({ agentId, agentRunning }: AgentSkillsListProps)
         </div>
       )}
 
-      {hasItems && (
+      {hasItems ? (
         <div className="space-y-1.5">
           {items.map((s) => (
             <SkillRow
@@ -613,6 +625,20 @@ export function AgentSkillsList({ agentId, agentRunning }: AgentSkillsListProps)
               onChanged={load}
             />
           ))}
+        </div>
+      ) : (
+        <div className="border border-dashed border-line-faint rounded p-6 flex flex-col items-center justify-center gap-3">
+          <div className="text-text-dim text-xs">Скиллов пока нет</div>
+          <button
+            type="button"
+            onClick={openFilePicker}
+            disabled={!!busy}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-copper/10 hover:bg-copper/20 text-copper border border-copper/30 rounded disabled:opacity-50"
+          >
+            <Upload size={12} />
+            <span>Загрузить скилл</span>
+          </button>
+          <div className="text-[10px] text-text-dim">принимает .md или .zip</div>
         </div>
       )}
 
