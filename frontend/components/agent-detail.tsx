@@ -213,6 +213,9 @@ const validateFieldValue = (value: string | number, field: AgentConfigField): st
 
 // --- Main component ---
 
+// Поля, у которых есть выделенный UI — не дублируем их в общем DnD-конфиге.
+const HIDDEN_CONFIG_KEYS = new Set(['ignore_external_users'])
+
 interface IgnoreExternalToggleProps {
   agentId: number
   agentRunning: boolean
@@ -443,9 +446,6 @@ export function AgentDetail({ agent, onDeleted }: AgentDetailProps) {
     setRevealedKeys(prev => new Set(prev).add(key))
   }
 
-  // Поля, у которых уже есть выделенный UI (browser, ignore_external_users), —
-  // не дублируем их в общем DnD-конфиге.
-  const HIDDEN_CONFIG_KEYS = new Set(['ignore_external_users'])
   const configEntries = agentConfig
     ? Object.entries(agentConfig).filter(([k]) => !HIDDEN_CONFIG_KEYS.has(k))
     : []
@@ -653,7 +653,7 @@ export function AgentDetail({ agent, onDeleted }: AgentDetailProps) {
         <IgnoreExternalToggle
           agentId={agent.id}
           agentRunning={agent.status === 'running'}
-          value={Boolean(agentConfig?.ignore_external_users?.value)}
+          value={agentConfig?.ignore_external_users?.value === true}
           onChange={(v) => {
             setAgentConfig(prev => prev ? {
               ...prev,
