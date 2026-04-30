@@ -74,6 +74,35 @@ export interface ScheduledTasksResponse {
   items: ScheduledTask[]
 }
 
+// Skills
+
+export interface Skill {
+  name: string
+  description: string
+  size: number
+}
+
+export interface SkillsListResponse {
+  items: Skill[]
+}
+
+export interface SkillContentResponse {
+  name: string
+  content: string
+}
+
+export type SkillImportStatus = 'created' | 'replaced' | 'skipped' | 'error'
+
+export interface SkillImportResult {
+  name: string
+  status: SkillImportStatus
+  error: string | null
+}
+
+export interface SkillImportResponse {
+  results: SkillImportResult[]
+}
+
 // Telethon auth
 
 export type TelethonAuthPhase = 'idle' | 'qr_pending' | 'success' | 'error' | 'expired'

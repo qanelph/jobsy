@@ -1,6 +1,6 @@
 import axios, { type AxiosInstance, type AxiosError } from 'axios'
 import { authStorage } from './auth'
-import type { Agent, AgentConfig, AgentVersion, CreateAgentRequest, ScheduledTasksResponse, UpdateAgentRequest, TelethonAuthStatus, TelethonSessionInfo } from '@/types/agent'
+import type { Agent, AgentConfig, AgentVersion, CreateAgentRequest, ScheduledTasksResponse, SkillContentResponse, SkillImportResponse, SkillsListResponse, UpdateAgentRequest, TelethonAuthStatus, TelethonSessionInfo } from '@/types/agent'
 import type { AuthResponse, TelegramUser } from '@/types/auth'
 import type { ClaudeAuthStatus, ClaudeUsage, OAuthStartResponse } from '@/types/claude-auth'
 import type { PlatformSettings, PlatformSettingsUpdate } from '@/types/settings'
@@ -110,6 +110,49 @@ class ApiClient {
 
   async getAgentScheduled(id: number): Promise<ScheduledTasksResponse> {
     const response = await this.client.get<ScheduledTasksResponse>(`/agents/${id}/scheduled`)
+    return response.data
+  }
+
+  // Agent Skills (proxy to agent container)
+
+  async listAgentSkills(id: number): Promise<SkillsListResponse> {
+    const response = await this.client.get<SkillsListResponse>(`/agents/${id}/skills`)
+    return response.data
+  }
+
+  async getAgentSkill(id: number, name: string): Promise<SkillContentResponse> {
+    const response = await this.client.get<SkillContentResponse>(`/agents/${id}/skills/${encodeURIComponent(name)}`)
+    return response.data
+  }
+
+  async putAgentSkill(id: number, name: string, content: string, overwrite = false): Promise<void> {
+    await this.client.put(`/agents/${id}/skills/${encodeURIComponent(name)}`, { content }, {
+      params: { overwrite },
+    })
+  }
+
+  async deleteAgentSkill(id: number, name: string): Promise<void> {
+    await this.client.delete(`/agents/${id}/skills/${encodeURIComponent(name)}`)
+  }
+
+  async bulkExportSkills(id: number, names: string[] | null): Promise<Blob> {
+    const response = await this.client.post(`/agents/${id}/skills/bulk-export`, { names }, {
+      responseType: 'blob',
+    })
+    return response.data as Blob
+  }
+
+  async bulkImportSkills(id: number, archive: Blob, overwrite = false): Promise<SkillImportResponse> {
+    const formData = new FormData()
+    formData.append('archive', archive, 'skills.zip')
+    const response = await this.client.post<SkillImportResponse>(
+      `/agents/${id}/skills/bulk-import`,
+      formData,
+      {
+        params: { overwrite },
+        headers: { 'Content-Type': 'multipart/form-data' },
+      },
+    )
     return response.data
   }
 
