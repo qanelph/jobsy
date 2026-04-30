@@ -135,7 +135,10 @@ async def get_oauth_usage(
         "User-Agent": "claude-code/2.0.31",
     }
     try:
-        async with httpx.AsyncClient(timeout=10.0, trust_env=False) as client:
+        # Anthropic API в РФ часто доступен только через прокси — пробрасываем
+        # настройку, как это делает jobs/_fetch_usage.
+        proxy = settings.http_proxy or None
+        async with httpx.AsyncClient(timeout=10.0, trust_env=False, proxy=proxy) as client:
             r = await client.get(
                 "https://api.anthropic.com/api/oauth/usage",
                 headers=headers,
