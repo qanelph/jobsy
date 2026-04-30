@@ -3,10 +3,10 @@
 import { useMemo } from 'react'
 import {
   aggregateByModel,
-  bucketTotalTokens,
   formatCompact,
   modelColor,
   modelDisplayName,
+  sumModelTotals,
   totalTokens,
 } from '@/lib/usage'
 import type { UsageSummaryBucket } from '@/types/usage'
@@ -27,7 +27,7 @@ interface Slice {
 export function AgentUsageRow({ bucket, onClick }: AgentUsageRowProps) {
   const { total, slices } = useMemo(() => {
     const byModel = aggregateByModel(bucket.snapshots)
-    const total = bucketTotalTokens(bucket)
+    const total = sumModelTotals(byModel)
     if (total === 0) {
       return { total: 0, slices: [] as Slice[] }
     }

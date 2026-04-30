@@ -61,13 +61,19 @@ def _coerce_cost(value: Any) -> float | None:
     return None
 
 
+_MAX_MODELS_PER_SNAPSHOT = 64
+_MAX_MODEL_NAME_LEN = 128
+
+
 def _build_breakdown(payload: dict[str, Any]) -> dict[str, dict[str, Any]]:
     breakdown: dict[str, dict[str, Any]] = {}
     for row in payload.get("by_model") or []:
+        if len(breakdown) >= _MAX_MODELS_PER_SNAPSHOT:
+            break
         if not isinstance(row, dict):
             continue
         model = row.get("model")
-        if not model or not isinstance(model, str):
+        if not isinstance(model, str) or not model or len(model) > _MAX_MODEL_NAME_LEN:
             continue
         breakdown[model] = {
             "input_tokens": _nonneg_int(row.get("input_tokens")),

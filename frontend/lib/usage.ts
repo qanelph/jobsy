@@ -57,10 +57,9 @@ export function aggregateByModel(snapshots: UsageSnapshot[]): Record<string, Mod
     for (const m of models) {
       const p = prev[m] ?? EMPTY_TOTALS
       const c = cur[m] ?? EMPTY_TOTALS
-      const d = m in cur && !(m in prev)
-        // модель появилась впервые в этом интервале — берём её целиком как дельту
-        ? c
-        : deltaModelTotals(c, p)
+      // deltaModelTotals сам обрабатывает случай "новая модель": при p=EMPTY_TOTALS
+      // даёт корректную дельту, при cur < prev — restart-защита.
+      const d = deltaModelTotals(c, p)
       acc[m] = m in acc ? addModelTotals(acc[m], d) : d
     }
   }
@@ -76,11 +75,14 @@ export function totalTokens(t: ModelTotals): number {
   )
 }
 
-export function bucketTotalTokens(bucket: UsageSummaryBucket): number {
-  const byModel = aggregateByModel(bucket.snapshots)
+export function sumModelTotals(byModel: Record<string, ModelTotals>): number {
   let sum = 0
   for (const t of Object.values(byModel)) sum += totalTokens(t)
   return sum
+}
+
+export function bucketTotalTokens(bucket: UsageSummaryBucket): number {
+  return sumModelTotals(aggregateByModel(bucket.snapshots))
 }
 
 const MODEL_PALETTE = [
