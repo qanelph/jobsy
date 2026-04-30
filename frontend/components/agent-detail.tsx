@@ -5,6 +5,7 @@ import { Eye, EyeOff, CircleHelp } from 'lucide-react'
 import { TelethonAuth } from '@/components/telethon-auth'
 import { UsageChart } from '@/components/usage-chart'
 import { ScheduledTasksList } from '@/components/scheduled-tasks-list'
+import { AgentSkillsList } from '@/components/agent-skills'
 import type { Agent, AgentConfig, AgentConfigField, AgentVersion, UpdateAgentRequest } from '@/types/agent'
 import type { UsagePeriod, UsageSnapshot } from '@/types/usage'
 import { useAgentsStore } from '@/store/agents'
@@ -706,6 +707,14 @@ export function AgentDetail({ agent, onDeleted }: AgentDetailProps) {
         <div className="space-y-2">
           <label className="block text-text-dim text-xs">расписание</label>
           <ScheduledTasksList agentId={agent.id} agentRunning={agent.status === 'running'} />
+        </div>
+
+        <div className="border-t border-line-faint" />
+
+        {/* Skills */}
+        <div className="space-y-2">
+          <label className="block text-text-dim text-xs">скиллы</label>
+          <AgentSkillsList agentId={agent.id} agentRunning={agent.status === 'running'} />
         </div>
 
         <div className="border-t border-line-faint" />

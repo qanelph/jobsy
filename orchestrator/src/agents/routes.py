@@ -1,9 +1,11 @@
 import json
+import re
 from datetime import datetime, timedelta, timezone
 from typing import Any, Literal, Optional
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi.responses import Response
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -227,21 +229,30 @@ async def _get_running_agent(agent_id: int, db: AsyncSession) -> Agent:
     return agent
 
 
-async def _proxy_to_agent(
+async def _proxy_to_agent_raw(
     agent: Agent,
     method: str,
-    json_body: dict[str, Any] | None = None,
-    params: dict[str, str] | None = None,
+    *,
     path: str = "/config",
-) -> dict[str, Any]:
-    """Проксировать запрос к HTTP API агента."""
+    json_body: dict[str, Any] | None = None,
+    params: dict[str, Any] | None = None,
+    files: dict[str, Any] | None = None,
+    timeout: float = 30.0,
+) -> httpx.Response:
+    """Низкоуровневый proxy — возвращает httpx.Response без парсинга.
+
+    Используется для бинарных ответов (ZIP) и multipart-загрузок. JSON-эндпоинты
+    оборачивает _proxy_to_agent.
+    """
     host = agent_internal_host(agent)
     url = f"http://{host}:8080{path}"
     headers = {"Authorization": f"Bearer {settings.jwt_secret_key}"}
 
     try:
-        async with httpx.AsyncClient(timeout=10.0, trust_env=False) as client:
-            response = await client.request(method, url, headers=headers, json=json_body, params=params)
+        async with httpx.AsyncClient(timeout=timeout, trust_env=False) as client:
+            response = await client.request(
+                method, url, headers=headers, json=json_body, params=params, files=files,
+            )
     except httpx.ConnectError:
         raise HTTPException(status_code=502, detail=f"Агент недоступен ({host}:8080)")
     except httpx.TimeoutException:
@@ -249,6 +260,22 @@ async def _proxy_to_agent(
 
     if response.status_code >= 400:
         raise HTTPException(status_code=response.status_code, detail=response.text)
+    return response
+
+
+async def _proxy_to_agent(
+    agent: Agent,
+    method: str,
+    json_body: dict[str, Any] | None = None,
+    params: dict[str, Any] | None = None,
+    path: str = "/config",
+) -> dict[str, Any]:
+    """Проксировать запрос к HTTP API агента и вернуть JSON."""
+    response = await _proxy_to_agent_raw(
+        agent, method, path=path, json_body=json_body, params=params,
+    )
+    if response.status_code == 204 or not response.content:
+        return {}
     return response.json()
 
 
@@ -286,6 +313,121 @@ async def get_agent_scheduled(
     """Список scheduled-задач агента (proxy к агенту)."""
     agent = await _get_running_agent(agent_id, db)
     return await _proxy_to_agent(agent, "GET", path="/scheduled")
+
+
+# --- Skills proxy ---
+
+_SKILL_NAME_RE = re.compile(r"^[A-Za-z0-9_-]+$")
+
+
+def _ensure_valid_skill_name(name: str) -> None:
+    if not _SKILL_NAME_RE.fullmatch(name):
+        raise HTTPException(status_code=400, detail="invalid skill name")
+
+
+@router.get("/{agent_id}/skills")
+async def list_agent_skills(
+    agent_id: int,
+    db: AsyncSession = Depends(get_db),
+    _user: User = require_any,
+) -> dict[str, Any]:
+    """Список skills агента."""
+    agent = await _get_running_agent(agent_id, db)
+    return await _proxy_to_agent(agent, "GET", path="/skills")
+
+
+@router.get("/{agent_id}/skills/{name}")
+async def get_agent_skill(
+    agent_id: int,
+    name: str,
+    db: AsyncSession = Depends(get_db),
+    _user: User = require_any,
+) -> dict[str, Any]:
+    """Содержимое одного SKILL.md."""
+    _ensure_valid_skill_name(name)
+    agent = await _get_running_agent(agent_id, db)
+    return await _proxy_to_agent(agent, "GET", path=f"/skills/{name}")
+
+
+@router.put("/{agent_id}/skills/{name}")
+async def put_agent_skill(
+    agent_id: int,
+    name: str,
+    body: dict[str, Any],
+    overwrite: bool = Query(False),
+    db: AsyncSession = Depends(get_db),
+    _user: User = require_admin,
+) -> dict[str, Any]:
+    """Создать или (с overwrite=true) перезаписать SKILL.md."""
+    _ensure_valid_skill_name(name)
+    agent = await _get_running_agent(agent_id, db)
+    return await _proxy_to_agent(
+        agent, "PUT", path=f"/skills/{name}",
+        json_body=body, params={"overwrite": str(overwrite).lower()},
+    )
+
+
+@router.delete("/{agent_id}/skills/{name}", status_code=204)
+async def delete_agent_skill(
+    agent_id: int,
+    name: str,
+    db: AsyncSession = Depends(get_db),
+    _user: User = require_admin,
+) -> Response:
+    _ensure_valid_skill_name(name)
+    agent = await _get_running_agent(agent_id, db)
+    await _proxy_to_agent(agent, "DELETE", path=f"/skills/{name}")
+    return Response(status_code=204)
+
+
+@router.post("/{agent_id}/skills/bulk-export")
+async def bulk_export_skills(
+    agent_id: int,
+    body: dict[str, Any],
+    db: AsyncSession = Depends(get_db),
+    _user: User = require_any,
+) -> Response:
+    """Скачать выбранные skills как ZIP (или все, если names пуст)."""
+    agent = await _get_running_agent(agent_id, db)
+    response = await _proxy_to_agent_raw(
+        agent, "POST", path="/skills/bulk-export", json_body=body, timeout=60.0,
+    )
+    return Response(
+        content=response.content,
+        media_type="application/zip",
+        headers={"Content-Disposition": 'attachment; filename="skills.zip"'},
+    )
+
+
+@router.post("/{agent_id}/skills/bulk-import")
+async def bulk_import_skills(
+    agent_id: int,
+    archive: UploadFile = File(...),
+    overwrite: bool = Query(False),
+    names: list[str] | None = Query(None),
+    db: AsyncSession = Depends(get_db),
+    _user: User = require_admin,
+) -> dict[str, Any]:
+    """Загрузить ZIP с несколькими skills. Существующие → status=skipped без overwrite.
+
+    names — опциональный фильтр: обрабатываются только эти имена из архива
+    (используется при retry'е «пропущенных»).
+    """
+    agent = await _get_running_agent(agent_id, db)
+    if names:
+        for n in names:
+            _ensure_valid_skill_name(n)
+    data = await archive.read()
+    params: list[tuple[str, str]] = [("overwrite", str(overwrite).lower())]
+    if names:
+        params.extend(("names", n) for n in names)
+    response = await _proxy_to_agent_raw(
+        agent, "POST", path="/skills/bulk-import",
+        files={"archive": (archive.filename or "skills.zip", data, "application/zip")},
+        params=params,
+        timeout=60.0,
+    )
+    return response.json()
 
 
 # --- Usage tracking ---
