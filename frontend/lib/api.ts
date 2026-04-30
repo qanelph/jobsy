@@ -142,14 +142,25 @@ class ApiClient {
     return response.data as Blob
   }
 
-  async bulkImportSkills(id: number, archive: Blob, overwrite = false): Promise<SkillImportResponse> {
+  async bulkImportSkills(
+    id: number,
+    archive: Blob,
+    overwrite = false,
+    names?: string[],
+  ): Promise<SkillImportResponse> {
     const formData = new FormData()
     formData.append('archive', archive, 'skills.zip')
+    const params: Record<string, unknown> = { overwrite }
+    if (names && names.length > 0) {
+      // axios сериализует массив через repeated key (?names=a&names=b) — то, что ждёт FastAPI Query(None).
+      params.names = names
+    }
     const response = await this.client.post<SkillImportResponse>(
       `/agents/${id}/skills/bulk-import`,
       formData,
       {
-        params: { overwrite },
+        params,
+        paramsSerializer: { indexes: null }, // names → ?names=a&names=b
         headers: { 'Content-Type': 'multipart/form-data' },
       },
     )

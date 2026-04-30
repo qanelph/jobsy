@@ -404,16 +404,27 @@ async def bulk_import_skills(
     agent_id: int,
     archive: UploadFile = File(...),
     overwrite: bool = Query(False),
+    names: list[str] | None = Query(None),
     db: AsyncSession = Depends(get_db),
     _user: User = require_admin,
 ) -> dict[str, Any]:
-    """Загрузить ZIP с несколькими skills. Существующие → status=skipped без overwrite."""
+    """Загрузить ZIP с несколькими skills. Существующие → status=skipped без overwrite.
+
+    names — опциональный фильтр: обрабатываются только эти имена из архива
+    (используется при retry'е «пропущенных»).
+    """
     agent = await _get_running_agent(agent_id, db)
+    if names:
+        for n in names:
+            _ensure_valid_skill_name(n)
     data = await archive.read()
+    params: list[tuple[str, str]] = [("overwrite", str(overwrite).lower())]
+    if names:
+        params.extend(("names", n) for n in names)
     response = await _proxy_to_agent_raw(
         agent, "POST", path="/skills/bulk-import",
         files={"archive": (archive.filename or "skills.zip", data, "application/zip")},
-        params={"overwrite": str(overwrite).lower()},
+        params=params,
         timeout=60.0,
     )
     return response.json()

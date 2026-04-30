@@ -43,7 +43,9 @@ function downloadBlob(blob: Blob, filename: string) {
   document.body.appendChild(a)
   a.click()
   a.remove()
-  URL.revokeObjectURL(url)
+  // Откладываем revoke — синхронный вызов после click() в некоторых браузерах
+  // (Safari/Firefox) прерывает скачивание.
+  setTimeout(() => URL.revokeObjectURL(url), 0)
 }
 
 function statusBadge(status: SkillImportResult['status']): string {
@@ -393,9 +395,9 @@ export function AgentSkillsList({ agentId, agentRunning }: AgentSkillsListProps)
       setPendingImport({
         results: resp.results,
         retry: async (names) => {
-          const filtered = await reExportFromArchive(file, names)
-          if (!filtered) return
-          const retry = await apiClient.bulkImportSkills(agentId, filtered, true)
+          // Тот же архив повторно, но сервер обрабатывает только пропущенные имена
+          // (?names=…) — успешно созданные/ошибочные при первом проходе НЕ перезаписываются.
+          const retry = await apiClient.bulkImportSkills(agentId, file, true, names)
           setPendingImport((prev) => {
             if (!prev) return prev
             const byName = new Map(retry.results.map((r) => [r.name, r]))
@@ -639,12 +641,3 @@ function CopyToMenu({ disabled, agents, onSelect }: CopyToMenuProps) {
   )
 }
 
-// Заглушка-helper для повторного импорта только пропущенных имён из ZIP-источника.
-// Стратегия: распаковка ZIP на клиенте требует JSZip, которого пока нет в зависимостях.
-// Поэтому для retry'я через ZIP мы повторно загружаем тот же исходный файл с overwrite=true,
-// а сервер на agent-стороне для уже созданных вернёт 'replaced', для остальных — 'skipped' остаётся
-// 'created' если он на самом деле не существовал. Дополнительная фильтрация имён не критична,
-// но для аккуратности фильтр потребовал бы JSZip — оставляем как TODO.
-async function reExportFromArchive(file: File, _names: string[]): Promise<File | null> {
-  return file
-}
