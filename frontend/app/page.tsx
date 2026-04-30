@@ -3,12 +3,15 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { authStorage, clearTokens } from '@/lib/auth'
+import { apiClient } from '@/lib/api'
 import { useAgentsStore } from '@/store/agents'
 import { AgentList } from '@/components/agent-list'
 import { AgentDetail } from '@/components/agent-detail'
 import { ClaudePopover } from '@/components/claude-popover'
 import { TelegramPopover } from '@/components/telegram-popover'
 import { UpdatesPopover } from '@/components/updates-popover'
+import { UsageChart } from '@/components/usage-chart'
+import type { UsagePeriod, UsageSummaryBucket } from '@/types/usage'
 
 export default function HomePage() {
   const router = useRouter()
@@ -50,6 +53,31 @@ export default function HomePage() {
     const interval = setInterval(() => fetchAgents(), 3000)
     return () => clearInterval(interval)
   }, [agents, fetchAgents])
+
+  // Usage summary
+  const [summaryPeriod, setSummaryPeriod] = useState<UsagePeriod>('7d')
+  const [summaryBuckets, setSummaryBuckets] = useState<UsageSummaryBucket[]>([])
+  const [summaryLoading, setSummaryLoading] = useState(false)
+
+  useEffect(() => {
+    if (!ready) return
+    let cancelled = false
+    setSummaryLoading(true)
+    apiClient
+      .getUsageSummary(summaryPeriod)
+      .then((res) => {
+        if (cancelled) return
+        setSummaryBuckets(res.agents)
+      })
+      .catch(() => {
+        if (cancelled) return
+        setSummaryBuckets([])
+      })
+      .finally(() => {
+        if (!cancelled) setSummaryLoading(false)
+      })
+    return () => { cancelled = true }
+  }, [ready, summaryPeriod])
 
   const handleCreate = async (name: string) => {
     try {
@@ -112,10 +140,19 @@ export default function HomePage() {
               }}
             />
           ) : (
-            <div className="flex items-center justify-center h-full text-text-dim text-sm">
-              {agents.length === 0
-                ? 'создайте первого агента нажав +'
-                : 'выберите агента'}
+            <div className="h-full overflow-y-auto px-6 py-5 space-y-5">
+              <UsageChart
+                mode="stacked"
+                period={summaryPeriod}
+                onPeriodChange={setSummaryPeriod}
+                agents={summaryBuckets}
+                loading={summaryLoading}
+              />
+              <div className="text-text-dim text-xs text-center">
+                {agents.length === 0
+                  ? 'создайте первого агента нажав +'
+                  : 'выберите агента'}
+              </div>
             </div>
           )}
         </main>

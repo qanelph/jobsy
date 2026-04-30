@@ -3,7 +3,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { Eye, EyeOff, CircleHelp } from 'lucide-react'
 import { TelethonAuth } from '@/components/telethon-auth'
+import { UsageChart } from '@/components/usage-chart'
 import type { Agent, AgentConfig, AgentConfigField, UpdateAgentRequest } from '@/types/agent'
+import type { UsagePeriod, UsageSnapshot } from '@/types/usage'
 import { useAgentsStore } from '@/store/agents'
 import { apiClient } from '@/lib/api'
 import {
@@ -249,6 +251,30 @@ export function AgentDetail({ agent, onDeleted }: AgentDetailProps) {
   const [configError, setConfigError] = useState<string | null>(null)
   const [revealedKeys, setRevealedKeys] = useState<Set<string>>(new Set())
   const [fieldErrors, setFieldErrors] = useState<Record<string, string | null>>({})
+
+  // Usage chart
+  const [usagePeriod, setUsagePeriod] = useState<UsagePeriod>('7d')
+  const [usageSnapshots, setUsageSnapshots] = useState<UsageSnapshot[]>([])
+  const [usageLoading, setUsageLoading] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    setUsageLoading(true)
+    apiClient
+      .getAgentUsage(agent.id, usagePeriod)
+      .then((res) => {
+        if (cancelled) return
+        setUsageSnapshots(res.snapshots)
+      })
+      .catch(() => {
+        if (cancelled) return
+        setUsageSnapshots([])
+      })
+      .finally(() => {
+        if (!cancelled) setUsageLoading(false)
+      })
+    return () => { cancelled = true }
+  }, [agent.id, usagePeriod])
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -496,6 +522,17 @@ export function AgentDetail({ agent, onDeleted }: AgentDetailProps) {
 
       {/* Fields */}
       <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+        {/* Usage chart */}
+        <UsageChart
+          mode="single"
+          period={usagePeriod}
+          onPeriodChange={setUsagePeriod}
+          snapshots={usageSnapshots}
+          loading={usageLoading}
+        />
+
+        <div className="border-t border-line-faint" />
+
         {/* TG Bot */}
         <div>
           <label className="block text-text-dim text-xs mb-1.5">telegram bot</label>
