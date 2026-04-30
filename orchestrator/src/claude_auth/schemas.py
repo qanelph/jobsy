@@ -41,8 +41,9 @@ class UsageWindow(BaseModel):
 
 class ExtraUsage(BaseModel):
     is_enabled: bool
-    used_credits: float       # USD
-    monthly_limit: float      # USD
+    # Anthropic присылает null когда extra-usage не включён или нет биллинга.
+    used_credits: Optional[float] = None       # USD
+    monthly_limit: Optional[float] = None      # USD
 
 
 class UsageResponse(BaseModel):
