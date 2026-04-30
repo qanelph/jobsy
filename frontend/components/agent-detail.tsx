@@ -732,7 +732,17 @@ export function AgentDetail({ agent, onDeleted }: AgentDetailProps) {
       {/* Actions footer */}
       <div className="flex items-center gap-2 px-6 h-12 border-t border-line-faint">
         {(agent.status === 'stopping' || agent.status === 'creating') && (
-          <span className="text-xs text-copper font-mono">{status.text}</span>
+          <>
+            <span className="text-xs text-copper font-mono">{status.text}</span>
+            <button
+              onClick={handleRestart}
+              disabled={actionLoading === 'restart'}
+              title="Принудительно пересоздать (если агент завис в этом статусе)"
+              className="h-7 px-3 text-xs text-copper hover:bg-copper/10 rounded transition-colors disabled:opacity-40"
+            >
+              {actionLoading === 'restart' ? '...' : 'force restart'}
+            </button>
+          </>
         )}
         {(agent.status === 'stopped' || agent.status === 'error') && (
           <button onClick={handleStart} disabled={actionLoading === 'start'} className="h-7 px-3 text-xs text-emerald-400 hover:bg-emerald-400/10 rounded transition-colors disabled:opacity-40">

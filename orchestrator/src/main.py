@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .database import init_db, get_db
+from .agents.cleanup import reset_stuck_agents
 from .agents.routes import router as agents_router
 from .auth.routes import router as auth_router
 from .claude_auth.routes import router as claude_auth_router
@@ -23,9 +24,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Инициализация приложения при старте"""
     await init_db()
 
-    # Загрузить dynamic settings из БД
+    # Загрузить dynamic settings из БД и подчистить залипших агентов после краша.
     async for db in get_db():
         await ConfigManager.load_from_db(db)
+        await reset_stuck_agents(db)
 
     refresh_task = asyncio.create_task(token_refresh_loop())
     usage_task = asyncio.create_task(usage_poll_loop())
