@@ -1,9 +1,12 @@
 import asyncio
+import logging
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
+logger = logging.getLogger(__name__)
 
 from .database import init_db, get_db
 from .agents.cleanup import reset_stuck_agents
@@ -25,9 +28,16 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     await init_db()
 
     # Загрузить dynamic settings из БД и подчистить залипших агентов после краша.
+    # reset_stuck_agents оборачиваем в try/except — это вспомогательная процедура,
+    # её отказ не должен мешать запуску оркестратора.
     async for db in get_db():
         await ConfigManager.load_from_db(db)
-        await reset_stuck_agents(db)
+        try:
+            count = await reset_stuck_agents(db)
+            if count:
+                logger.info("Reset %d stuck agents on startup", count)
+        except Exception:
+            logger.exception("Failed to reset stuck agents on startup")
 
     refresh_task = asyncio.create_task(token_refresh_loop())
     usage_task = asyncio.create_task(usage_poll_loop())
