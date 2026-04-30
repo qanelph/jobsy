@@ -2,8 +2,11 @@ import logging
 
 import httpx
 from fastapi import APIRouter, Depends, Header, HTTPException, Response
+from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..auth.dependencies import require_admin
+from ..auth.models import User
 from ..config import settings
 from ..database import get_db
 from .distributor import CredentialDistributor
@@ -98,7 +101,10 @@ async def distribute_credentials(db: AsyncSession = Depends(get_db)) -> Distribu
 
 
 @router.get("/usage", response_model=UsageResponse | None)
-async def get_oauth_usage(db: AsyncSession = Depends(get_db)) -> UsageResponse | None:
+async def get_oauth_usage(
+    db: AsyncSession = Depends(get_db),
+    _user: User = require_admin,
+) -> UsageResponse | None:
     """Прогресс по OAuth-лимитам Anthropic. None — если не OAuth или токен невалиден."""
     cred = await _manager._get_credential(db)
     if not cred or cred.auth_mode != AuthMode.OAUTH or not cred.access_token:
@@ -138,6 +144,7 @@ async def get_oauth_usage(db: AsyncSession = Depends(get_db)) -> UsageResponse |
 
     try:
         return UsageResponse(**r.json())
-    except ValueError as exc:
+    except (ValueError, ValidationError) as exc:
+        # ValueError ловит json.JSONDecodeError; ValidationError — Pydantic v2.
         logging.getLogger(__name__).warning("OAuth usage parse failed: %s", exc)
         return None

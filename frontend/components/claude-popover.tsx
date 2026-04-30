@@ -62,6 +62,7 @@ export function ClaudePopover() {
 
   // OAuth usage прогресс-бары
   const [usage, setUsage] = useState<ClaudeUsage | null>(null)
+  const [usageError, setUsageError] = useState(false)
 
   // API key flow
   const [showApiKey, setShowApiKey] = useState(false)
@@ -86,12 +87,18 @@ export function ClaudePopover() {
   useEffect(() => {
     if (!open || status?.auth_mode !== 'oauth' || !status?.configured) {
       setUsage(null)
+      setUsageError(false)
       return
     }
     let cancelled = false
+    setUsageError(false)
     apiClient.getClaudeUsage()
       .then((data) => { if (!cancelled) setUsage(data) })
-      .catch(() => { if (!cancelled) setUsage(null) })
+      .catch(() => {
+        if (cancelled) return
+        setUsage(null)
+        setUsageError(true)
+      })
     return () => { cancelled = true }
   }, [open, status?.auth_mode, status?.configured])
 
@@ -207,6 +214,11 @@ export function ClaudePopover() {
                   {usage.extra_usage?.is_enabled && (
                     <ExtraUsageRow extra={usage.extra_usage} />
                   )}
+                </div>
+              )}
+              {usageError && !usage && (
+                <div className="pt-2 border-t border-line-faint text-[10px] text-text-dim">
+                  не удалось загрузить лимиты
                 </div>
               )}
               <button
