@@ -50,20 +50,21 @@ function TaskRow({ task }: TaskRowProps) {
   const [open, setOpen] = useState(false)
   const repeat = formatRepeat(task.schedule_repeat)
   const hasResult = !!(task.result?.output || task.result?.error)
-  const expandable = hasResult
 
   const summary = task.result?.error
     ? `❌ ${task.result.error}`
     : task.result?.output || ''
 
+  // Кнопка всегда фокусабельна (не disabled) — но если разворачивать нечего,
+  // клик ничего не делает. Так доступность сохраняется.
   return (
     <div className="bg-panel border border-line-faint rounded">
       <button
         type="button"
-        disabled={!expandable}
-        onClick={() => expandable && setOpen(!open)}
+        onClick={() => hasResult && setOpen(!open)}
+        aria-expanded={hasResult ? open : undefined}
         className={`w-full text-left px-3 py-2 flex items-start gap-2 ${
-          expandable ? 'hover:bg-hover cursor-pointer' : 'cursor-default'
+          hasResult ? 'hover:bg-hover cursor-pointer' : 'cursor-default'
         }`}
       >
         <span className={`text-[10px] font-mono shrink-0 mt-0.5 ${statusColor(task.status)}`}>
@@ -80,7 +81,7 @@ function TaskRow({ task }: TaskRowProps) {
             )}
           </div>
         </div>
-        {expandable && (
+        {hasResult && (
           <ChevronDown
             size={12}
             className={`shrink-0 mt-1 text-text-dim transition-transform ${open ? 'rotate-180' : ''}`}
@@ -173,16 +174,15 @@ export function ScheduledTasksList({ agentId, agentRunning }: ScheduledTasksList
         ))}
       </div>
       {archive.length > 0 && (
-        <details className="space-y-1.5" open={showDone}>
-          <summary
-            onClick={(e) => {
-              e.preventDefault()
-              setShowDone(!showDone)
-            }}
-            className="text-text-dim text-xs cursor-pointer hover:text-text-main list-none"
+        <div className="space-y-1.5">
+          <button
+            type="button"
+            onClick={() => setShowDone(!showDone)}
+            aria-expanded={showDone}
+            className="text-text-dim text-xs hover:text-text-main"
           >
             {showDone ? '▾' : '▸'} архив ({archive.length})
-          </summary>
+          </button>
           {showDone && (
             <div className="space-y-1.5">
               {archive.map((t) => (
@@ -190,7 +190,7 @@ export function ScheduledTasksList({ agentId, agentRunning }: ScheduledTasksList
               ))}
             </div>
           )}
-        </details>
+        </div>
       )}
     </div>
   )
