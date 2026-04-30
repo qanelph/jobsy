@@ -40,9 +40,9 @@ export interface UpdateAgentRequest {
 }
 
 export interface AgentConfigField {
-  value: string | number | string[] | null
+  value: string | number | boolean | string[] | null
   mutable: boolean
-  type?: string // "str" | "int" | "secret" | "path" | "list[int]" | ...
+  type?: string // "str" | "int" | "bool" | "secret" | "path" | "list[int]" | ...
 }
 
 export type AgentConfig = Record<string, AgentConfigField>

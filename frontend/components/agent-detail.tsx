@@ -213,6 +213,61 @@ const validateFieldValue = (value: string | number, field: AgentConfigField): st
 
 // --- Main component ---
 
+interface IgnoreExternalToggleProps {
+  agentId: number
+  agentRunning: boolean
+  value: boolean
+  onChange: (next: boolean) => void
+}
+
+function IgnoreExternalToggle({ agentId, agentRunning, value, onChange }: IgnoreExternalToggleProps) {
+  const [busy, setBusy] = useState(false)
+
+  const toggle = async () => {
+    if (!agentRunning || busy) return
+    const next = !value
+    setBusy(true)
+    // Оптимистичный UI: применяем сразу, откатываем при ошибке.
+    onChange(next)
+    try {
+      await apiClient.patchAgentSettings(agentId, { ignore_external_users: next })
+    } catch {
+      onChange(value)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const disabled = !agentRunning || busy
+
+  return (
+    <div className="flex items-center justify-between">
+      <div>
+        <label className="block text-text-dim text-xs">игнорировать чужих</label>
+        <span className="text-text-dim text-[10px]">
+          {agentRunning
+            ? 'бот не отвечает никому кроме админов'
+            : 'доступно у запущенного агента'}
+        </span>
+      </div>
+      <button
+        onClick={toggle}
+        disabled={disabled}
+        className={`w-8 h-4 rounded-full relative transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+          value ? 'bg-copper' : 'bg-line-subtle'
+        }`}
+      >
+        <span
+          className={`absolute top-0.5 w-3 h-3 rounded-full bg-text-bright transition-all ${
+            value ? 'left-[18px]' : 'left-0.5'
+          }`}
+        />
+      </button>
+    </div>
+  )
+}
+
+
 interface AgentDetailProps { agent: Agent; onDeleted: () => void }
 
 export function AgentDetail({ agent, onDeleted }: AgentDetailProps) {
@@ -358,6 +413,7 @@ export function AgentDetail({ agent, onDeleted }: AgentDetailProps) {
     const raw = agentConfig?.[key]?.value
     if (raw === null || raw === undefined) return ''
     if (Array.isArray(raw)) return raw.join(', ')
+    if (typeof raw === 'boolean') return raw ? 'true' : 'false'
     return raw
   }
 
@@ -387,7 +443,12 @@ export function AgentDetail({ agent, onDeleted }: AgentDetailProps) {
     setRevealedKeys(prev => new Set(prev).add(key))
   }
 
-  const configEntries = agentConfig ? Object.entries(agentConfig) : []
+  // Поля, у которых уже есть выделенный UI (browser, ignore_external_users), —
+  // не дублируем их в общем DnD-конфиге.
+  const HIDDEN_CONFIG_KEYS = new Set(['ignore_external_users'])
+  const configEntries = agentConfig
+    ? Object.entries(agentConfig).filter(([k]) => !HIDDEN_CONFIG_KEYS.has(k))
+    : []
   const mutableFields = configEntries.filter(([, f]) => isMutable(f))
   const immutableFields = configEntries.filter(([, f]) => !isMutable(f))
   const globalMutable = mutableFields.filter(([key]) => getScope(key) === 'global')
@@ -587,6 +648,19 @@ export function AgentDetail({ agent, onDeleted }: AgentDetailProps) {
             <span className={`absolute top-0.5 w-3 h-3 rounded-full bg-text-bright transition-all ${browserEnabled ? 'left-[18px]' : 'left-0.5'}`} />
           </button>
         </div>
+
+        {/* Ignore external users toggle (live, без рестарта) */}
+        <IgnoreExternalToggle
+          agentId={agent.id}
+          agentRunning={agent.status === 'running'}
+          value={Boolean(agentConfig?.ignore_external_users?.value)}
+          onChange={(v) => {
+            setAgentConfig(prev => prev ? {
+              ...prev,
+              ignore_external_users: { ...(prev.ignore_external_users ?? { mutable: true, type: 'bool' }), value: v },
+            } : prev)
+          }}
+        />
 
         <div className="border-t border-line-faint" />
 
