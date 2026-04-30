@@ -42,6 +42,7 @@ function UsageBar({ label, window: w }: { label: string; window: UsageWindow | n
 }
 
 function ExtraUsageRow({ extra }: { extra: ExtraUsage }) {
+  if (extra.used_credits == null || extra.monthly_limit == null) return null
   const over = extra.used_credits > extra.monthly_limit
   return (
     <div className={`text-[10px] font-mono ${over ? 'text-rose' : 'text-text-dim'}`}>

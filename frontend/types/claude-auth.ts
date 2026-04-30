@@ -19,8 +19,9 @@ export interface UsageWindow {
 
 export interface ExtraUsage {
   is_enabled: boolean
-  used_credits: number  // USD
-  monthly_limit: number // USD
+  // Anthropic присылает null когда extra-usage не подключён.
+  used_credits: number | null  // USD
+  monthly_limit: number | null // USD
 }
 
 export interface ClaudeUsage {
