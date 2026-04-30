@@ -216,9 +216,14 @@ export function ClaudePopover() {
                   )}
                 </div>
               )}
-              {usageError && !usage && (
+              {usageError && (
                 <div className="pt-2 border-t border-line-faint text-[10px] text-text-dim">
                   не удалось загрузить лимиты
+                </div>
+              )}
+              {!usage && !usageError && status.auth_mode === 'oauth' && (
+                <div className="pt-2 border-t border-line-faint text-[10px] text-text-dim">
+                  лимиты недоступны — токен истёк, переподключи OAuth
                 </div>
               )}
               <button

@@ -106,17 +106,27 @@ async def get_oauth_usage(
     _user: User = require_admin,
 ) -> UsageResponse | None:
     """Прогресс по OAuth-лимитам Anthropic. None — если не OAuth или токен невалиден."""
+    log = logging.getLogger(__name__)
+
     cred = await _manager._get_credential(db)
-    if not cred or cred.auth_mode != AuthMode.OAUTH or not cred.access_token:
+    if not cred:
+        log.info("OAuth usage: no credential row")
+        return None
+    if cred.auth_mode != AuthMode.OAUTH:
+        log.info("OAuth usage: auth_mode=%s — не OAuth, пропускаем", cred.auth_mode)
+        return None
+    if not cred.access_token:
+        log.info("OAuth usage: access_token пуст")
         return None
 
     try:
         await _manager.refresh_if_needed(db)
     except Exception:
-        logging.getLogger(__name__).warning("Token refresh failed in get_oauth_usage", exc_info=True)
+        log.warning("Token refresh failed in get_oauth_usage", exc_info=True)
 
     cred = await _manager._get_credential(db)
     if not cred or not cred.access_token:
+        log.info("OAuth usage: после refresh access_token пуст")
         return None
 
     headers = {
@@ -135,16 +145,15 @@ async def get_oauth_usage(
         raise HTTPException(status_code=502, detail="Anthropic OAuth API недоступен")
 
     if r.status_code in (401, 403):
+        log.info("OAuth usage: Anthropic вернул %s — токен отозван/недействителен", r.status_code)
         return None
     if r.status_code >= 400:
-        logging.getLogger(__name__).warning(
-            "OAuth usage non-2xx: status=%s body=%s", r.status_code, r.text[:200]
-        )
+        log.warning("OAuth usage non-2xx: status=%s body=%s", r.status_code, r.text[:200])
         raise HTTPException(status_code=502, detail=f"Anthropic API: {r.status_code}")
 
     try:
         return UsageResponse(**r.json())
     except (ValueError, ValidationError) as exc:
         # ValueError ловит json.JSONDecodeError; ValidationError — Pydantic v2.
-        logging.getLogger(__name__).warning("OAuth usage parse failed: %s", exc)
+        log.warning("OAuth usage parse failed: %s body=%s", exc, r.text[:200])
         return None
