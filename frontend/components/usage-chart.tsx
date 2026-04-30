@@ -73,21 +73,30 @@ interface DeltaRow {
   cache: number
 }
 
+// При рестарте агента кумулятивный счётчик может упасть.
+// Тогда cur — это уже "с нуля", и его сырое значение и есть дельта за интервал.
+function delta(cur: number, prev: number): number {
+  return cur >= prev ? cur - prev : Math.max(0, cur)
+}
+
 function snapshotsToDeltas(snaps: UsageSnapshot[]): DeltaRow[] {
-  if (snaps.length < 2) return []
+  if (snaps.length === 0) return []
+  if (snaps.length === 1) {
+    const s = snaps[0]
+    return [{
+      ts: s.taken_at,
+      tokens: s.input_tokens + s.output_tokens,
+      cache: s.cache_creation_input_tokens + s.cache_read_input_tokens,
+    }]
+  }
   const out: DeltaRow[] = []
   for (let i = 1; i < snaps.length; i++) {
     const prev = snaps[i - 1]
     const cur = snaps[i]
-    const tokens = Math.max(
-      0,
-      (cur.input_tokens - prev.input_tokens) + (cur.output_tokens - prev.output_tokens),
-    )
-    const cache = Math.max(
-      0,
-      (cur.cache_creation_input_tokens - prev.cache_creation_input_tokens)
-      + (cur.cache_read_input_tokens - prev.cache_read_input_tokens),
-    )
+    const tokens = delta(cur.input_tokens, prev.input_tokens)
+      + delta(cur.output_tokens, prev.output_tokens)
+    const cache = delta(cur.cache_creation_input_tokens, prev.cache_creation_input_tokens)
+      + delta(cur.cache_read_input_tokens, prev.cache_read_input_tokens)
     out.push({ ts: cur.taken_at, tokens, cache })
   }
   return out

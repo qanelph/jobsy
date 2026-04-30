@@ -35,7 +35,7 @@ _PERIOD_TO_TIMEDELTA = {
 }
 
 
-def _period_threshold(period: str) -> datetime:
+def _period_threshold(period: PeriodLiteral) -> datetime:
     return datetime.now(timezone.utc) - _PERIOD_TO_TIMEDELTA[period]
 
 router = APIRouter(prefix="/agents", tags=["agents"])
@@ -244,7 +244,7 @@ async def patch_agent_settings(
 async def get_usage_summary(
     period: PeriodLiteral = Query("7d"),
     db: AsyncSession = Depends(get_db),
-    _user: User = require_any,
+    _user: User = require_admin,
 ) -> UsageSummaryResponse:
     """Сводный timeseries usage по всем активным (не deleted) агентам."""
     threshold = _period_threshold(period)
@@ -282,7 +282,7 @@ async def get_agent_usage(
     agent_id: int,
     period: PeriodLiteral = Query("7d"),
     db: AsyncSession = Depends(get_db),
-    _user: User = require_any,
+    _user: User = require_admin,
 ) -> AgentUsageResponse:
     """Кумулятивные snapshots для одного агента за выбранный период."""
     agent = await db.get(Agent, agent_id)
