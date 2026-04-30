@@ -256,6 +256,7 @@ export function AgentDetail({ agent, onDeleted }: AgentDetailProps) {
   const [usagePeriod, setUsagePeriod] = useState<UsagePeriod>('7d')
   const [usageSnapshots, setUsageSnapshots] = useState<UsageSnapshot[]>([])
   const [usageLoading, setUsageLoading] = useState(false)
+  const [usageReloadTick, setUsageReloadTick] = useState(0)
 
   useEffect(() => {
     let cancelled = false
@@ -274,7 +275,7 @@ export function AgentDetail({ agent, onDeleted }: AgentDetailProps) {
         if (!cancelled) setUsageLoading(false)
       })
     return () => { cancelled = true }
-  }, [agent.id, usagePeriod])
+  }, [agent.id, usagePeriod, usageReloadTick])
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -527,6 +528,7 @@ export function AgentDetail({ agent, onDeleted }: AgentDetailProps) {
           mode="single"
           period={usagePeriod}
           onPeriodChange={setUsagePeriod}
+          onRefresh={() => setUsageReloadTick((t) => t + 1)}
           snapshots={usageSnapshots}
           loading={usageLoading}
         />

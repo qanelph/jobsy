@@ -12,7 +12,9 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    text,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
 
@@ -112,3 +114,6 @@ class AgentUsageSnapshot(Base):
     cache_read_input_tokens: Mapped[int] = mapped_column(BigInteger, default=0, nullable=False, server_default="0")
     total_cost_usd: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     events_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False, server_default="0")
+    breakdown_by_model: Mapped[dict] = mapped_column(
+        JSONB, default=dict, nullable=False, server_default=text("'{}'::jsonb"),
+    )

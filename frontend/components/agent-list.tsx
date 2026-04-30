@@ -15,7 +15,7 @@ const statusDot: Record<string, string> = {
 interface AgentListProps {
   agents: Agent[]
   selectedId: number | null
-  onSelect: (id: number) => void
+  onSelect: (id: number | null) => void
   onCreate: (name: string) => void
 }
 
@@ -65,6 +65,17 @@ export function AgentList({ agents, selectedId, onSelect, onCreate }: AgentListP
 
       {/* Agent list */}
       <div className="flex-1 overflow-y-auto">
+        <button
+          onClick={() => onSelect(null)}
+          className={`w-full text-left px-4 py-2.5 flex items-center gap-2 text-sm transition-colors border-b border-line-faint ${
+            selectedId === null
+              ? 'bg-active text-text-bright'
+              : 'text-text-main hover:bg-hover'
+          }`}
+        >
+          <span className="text-text-dim">∑</span>
+          <span className="truncate font-mono text-xs">обзор</span>
+        </button>
         {agents.length === 0 && !creating && (
           <div className="px-4 py-6 text-text-dim text-xs text-center">
             нет агентов
