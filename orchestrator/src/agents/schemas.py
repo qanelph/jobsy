@@ -92,6 +92,7 @@ class UsageSnapshotItem(BaseModel):
     cache_read_input_tokens: int
     total_cost_usd: Optional[float]
     events_count: int
+    breakdown_by_model: dict[str, dict[str, Optional[float]]] = Field(default_factory=dict)
 
 
 class AgentUsageResponse(BaseModel):

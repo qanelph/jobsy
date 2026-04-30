@@ -14,7 +14,7 @@ from ..utils.agent_host import agent_internal_host
 
 logger = logging.getLogger(__name__)
 
-POLL_INTERVAL_SECONDS = 5 * 60
+POLL_INTERVAL_SECONDS = 60
 HTTP_TIMEOUT_SECONDS = 10.0
 MAX_PARALLEL_FETCHES = 16
 
@@ -52,19 +52,44 @@ async def _fetch_agent_usage(
         return None
 
 
+def _coerce_cost(value: Any) -> float | None:
+    # bool — наследник int в Python; явно отсекаем, чтобы True не записался как 1.0 USD.
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    return None
+
+
+def _build_breakdown(payload: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    breakdown: dict[str, dict[str, Any]] = {}
+    for row in payload.get("by_model") or []:
+        if not isinstance(row, dict):
+            continue
+        model = row.get("model")
+        if not model or not isinstance(model, str):
+            continue
+        breakdown[model] = {
+            "input_tokens": _nonneg_int(row.get("input_tokens")),
+            "output_tokens": _nonneg_int(row.get("output_tokens")),
+            "cache_creation_input_tokens": _nonneg_int(row.get("cache_creation_input_tokens")),
+            "cache_read_input_tokens": _nonneg_int(row.get("cache_read_input_tokens")),
+            "total_cost_usd": _coerce_cost(row.get("total_cost_usd")),
+        }
+    return breakdown
+
+
 def _payload_to_snapshot(agent_id: int, payload: dict[str, Any]) -> AgentUsageSnapshot:
     totals = payload.get("totals") or {}
-    cost = totals.get("total_cost_usd")
-    # bool — наследник int в Python; явно отсекаем, чтобы True не записался как 1.0 USD.
-    is_cost_numeric = isinstance(cost, (int, float)) and not isinstance(cost, bool)
     return AgentUsageSnapshot(
         agent_id=agent_id,
         input_tokens=_nonneg_int(totals.get("input_tokens")),
         output_tokens=_nonneg_int(totals.get("output_tokens")),
         cache_creation_input_tokens=_nonneg_int(totals.get("cache_creation_input_tokens")),
         cache_read_input_tokens=_nonneg_int(totals.get("cache_read_input_tokens")),
-        total_cost_usd=float(cost) if is_cost_numeric else None,
+        total_cost_usd=_coerce_cost(totals.get("total_cost_usd")),
         events_count=_nonneg_int(totals.get("events_count")),
+        breakdown_by_model=_build_breakdown(payload),
     )
 
 
