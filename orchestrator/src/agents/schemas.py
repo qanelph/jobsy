@@ -110,3 +110,8 @@ class AgentUsageBucket(BaseModel):
 class UsageSummaryResponse(BaseModel):
     period: str
     agents: list[AgentUsageBucket]
+
+
+class AgentVersionResponse(BaseModel):
+    image_sha: Optional[str] = None     # короткий commit sha (7 символов)
+    browser_sha: Optional[str] = None

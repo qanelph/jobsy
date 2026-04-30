@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { Eye, EyeOff, CircleHelp } from 'lucide-react'
 import { TelethonAuth } from '@/components/telethon-auth'
 import { UsageChart } from '@/components/usage-chart'
-import type { Agent, AgentConfig, AgentConfigField, UpdateAgentRequest } from '@/types/agent'
+import type { Agent, AgentConfig, AgentConfigField, AgentVersion, UpdateAgentRequest } from '@/types/agent'
 import type { UsagePeriod, UsageSnapshot } from '@/types/usage'
 import { useAgentsStore } from '@/store/agents'
 import { apiClient } from '@/lib/api'
@@ -310,6 +310,21 @@ export function AgentDetail({ agent, onDeleted }: AgentDetailProps) {
   const [revealedKeys, setRevealedKeys] = useState<Set<string>>(new Set())
   const [fieldErrors, setFieldErrors] = useState<Record<string, string | null>>({})
 
+  // Версия образа
+  const [version, setVersion] = useState<AgentVersion | null>(null)
+
+  useEffect(() => {
+    if (agent.status !== 'running') {
+      setVersion(null)
+      return
+    }
+    let cancelled = false
+    apiClient.getAgentVersion(agent.id)
+      .then((v) => { if (!cancelled) setVersion(v) })
+      .catch(() => { if (!cancelled) setVersion(null) })
+    return () => { cancelled = true }
+  }, [agent.id, agent.status])
+
   // Usage chart
   const [usagePeriod, setUsagePeriod] = useState<UsagePeriod>('7d')
   const [usageSnapshots, setUsageSnapshots] = useState<UsageSnapshot[]>([])
@@ -579,7 +594,21 @@ export function AgentDetail({ agent, onDeleted }: AgentDetailProps) {
       {/* Header */}
       <div className="flex items-center justify-between px-6 h-14 border-b border-line-faint">
         <h2 className="font-mono text-sm text-text-bright">{agent.name}</h2>
-        <span className={`text-xs font-mono ${status.color}`}>{status.symbol} {status.text}</span>
+        <div className="flex items-center gap-3">
+          {version?.image_sha && (
+            <span
+              className="text-[10px] font-mono text-text-dim"
+              title={
+                version.browser_sha
+                  ? `agent: ${version.image_sha}\nbrowser: ${version.browser_sha}`
+                  : `agent: ${version.image_sha}`
+              }
+            >
+              {version.image_sha}
+            </span>
+          )}
+          <span className={`text-xs font-mono ${status.color}`}>{status.symbol} {status.text}</span>
+        </div>
       </div>
 
       {/* Fields */}
