@@ -2,7 +2,7 @@ import axios, { type AxiosInstance, type AxiosError } from 'axios'
 import { authStorage } from './auth'
 import type { Agent, AgentConfig, CreateAgentRequest, UpdateAgentRequest, TelethonAuthStatus, TelethonSessionInfo } from '@/types/agent'
 import type { AuthResponse, TelegramUser } from '@/types/auth'
-import type { ClaudeAuthStatus, OAuthStartResponse } from '@/types/claude-auth'
+import type { ClaudeAuthStatus, ClaudeUsage, OAuthStartResponse } from '@/types/claude-auth'
 import type { PlatformSettings, PlatformSettingsUpdate } from '@/types/settings'
 import type { UpdateStatus, VersionEntry } from '@/types/updates'
 import type { AgentUsageResponse, UsagePeriod, UsageSummaryResponse } from '@/types/usage'
@@ -139,6 +139,11 @@ class ApiClient {
 
   async clearClaudeAuth(): Promise<void> {
     await this.client.delete('/claude-auth')
+  }
+
+  async getClaudeUsage(): Promise<ClaudeUsage | null> {
+    const response = await this.client.get<ClaudeUsage | null>('/claude-auth/usage')
+    return response.data
   }
 
   // Telethon Auth

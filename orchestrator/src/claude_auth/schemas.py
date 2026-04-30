@@ -32,3 +32,22 @@ class DistributeResponse(BaseModel):
 
 class CredentialsPullResponse(BaseModel):
     credentials: Optional[dict] = None
+
+
+class UsageWindow(BaseModel):
+    utilization: float        # 0..100
+    resets_at: str            # ISO 8601
+
+
+class ExtraUsage(BaseModel):
+    is_enabled: bool
+    used_credits: float       # USD
+    monthly_limit: float      # USD
+
+
+class UsageResponse(BaseModel):
+    five_hour: Optional[UsageWindow] = None
+    seven_day: Optional[UsageWindow] = None
+    seven_day_opus: Optional[UsageWindow] = None
+    seven_day_sonnet: Optional[UsageWindow] = None
+    extra_usage: Optional[ExtraUsage] = None

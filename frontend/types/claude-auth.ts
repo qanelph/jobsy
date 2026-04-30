@@ -12,3 +12,22 @@ export interface OAuthStartResponse {
   state: string
 }
 
+export interface UsageWindow {
+  utilization: number   // 0..100
+  resets_at: string     // ISO 8601
+}
+
+export interface ExtraUsage {
+  is_enabled: boolean
+  used_credits: number  // USD
+  monthly_limit: number // USD
+}
+
+export interface ClaudeUsage {
+  five_hour: UsageWindow | null
+  seven_day: UsageWindow | null
+  seven_day_opus: UsageWindow | null
+  seven_day_sonnet: UsageWindow | null
+  extra_usage: ExtraUsage | null
+}
+
