@@ -1,6 +1,6 @@
 import axios, { type AxiosInstance, type AxiosError } from 'axios'
 import { authStorage } from './auth'
-import type { Agent, AgentConfig, AgentVersion, CreateAgentRequest, UpdateAgentRequest, TelethonAuthStatus, TelethonSessionInfo } from '@/types/agent'
+import type { Agent, AgentConfig, AgentVersion, CreateAgentRequest, ScheduledTasksResponse, UpdateAgentRequest, TelethonAuthStatus, TelethonSessionInfo } from '@/types/agent'
 import type { AuthResponse, TelegramUser } from '@/types/auth'
 import type { ClaudeAuthStatus, ClaudeUsage, OAuthStartResponse } from '@/types/claude-auth'
 import type { PlatformSettings, PlatformSettingsUpdate } from '@/types/settings'
@@ -105,6 +105,11 @@ class ApiClient {
 
   async getAgentVersion(id: number): Promise<AgentVersion> {
     const response = await this.client.get<AgentVersion>(`/agents/${id}/version`)
+    return response.data
+  }
+
+  async getAgentScheduled(id: number): Promise<ScheduledTasksResponse> {
+    const response = await this.client.get<ScheduledTasksResponse>(`/agents/${id}/scheduled`)
     return response.data
   }
 

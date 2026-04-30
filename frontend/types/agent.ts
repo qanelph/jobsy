@@ -52,6 +52,28 @@ export interface AgentVersion {
   browser_sha: string | null
 }
 
+export interface ScheduledTaskResult {
+  ran_at?: string
+  output?: string
+  error?: string
+}
+
+export interface ScheduledTask {
+  id: string
+  title: string
+  status: string
+  schedule_at: string | null
+  schedule_repeat: number | null   // секунды
+  model: string | null
+  recipient_ids: number[] | null
+  created_at: string
+  result: ScheduledTaskResult | null
+}
+
+export interface ScheduledTasksResponse {
+  items: ScheduledTask[]
+}
+
 // Telethon auth
 
 export type TelethonAuthPhase = 'idle' | 'qr_pending' | 'success' | 'error' | 'expired'
