@@ -1,6 +1,6 @@
 import axios, { type AxiosInstance, type AxiosError } from 'axios'
 import { authStorage } from './auth'
-import type { Agent, AgentConfig, CreateAgentRequest, UpdateAgentRequest, TelethonAuthStatus, TelethonSessionInfo } from '@/types/agent'
+import type { Agent, AgentConfig, AgentVersion, CreateAgentRequest, UpdateAgentRequest, TelethonAuthStatus, TelethonSessionInfo } from '@/types/agent'
 import type { AuthResponse, TelegramUser } from '@/types/auth'
 import type { ClaudeAuthStatus, ClaudeUsage, OAuthStartResponse } from '@/types/claude-auth'
 import type { PlatformSettings, PlatformSettingsUpdate } from '@/types/settings'
@@ -100,6 +100,11 @@ class ApiClient {
 
   async patchAgentSettings(id: number, data: Record<string, unknown>): Promise<AgentConfig> {
     const response = await this.client.patch<AgentConfig>(`/agents/${id}/settings`, data)
+    return response.data
+  }
+
+  async getAgentVersion(id: number): Promise<AgentVersion> {
+    const response = await this.client.get<AgentVersion>(`/agents/${id}/version`)
     return response.data
   }
 

@@ -119,19 +119,44 @@ async def check_all() -> UpdateStatus:
     )
 
 
+async def _get_latest_full_sha(image: str) -> str:
+    """Полный 40-символьный commit sha из latest тега Docker Hub. Пусто если нет."""
+    tags = await checker._fetch_tags(image)
+    latest_digest = ""
+    for tag in tags:
+        if tag["name"] == "latest":
+            latest_digest = tag["digest"]
+            break
+    for tag in tags:
+        name = tag["name"]
+        if name.startswith("sha-") and tag["digest"] == latest_digest:
+            return name[4:]  # полный sha без префикса sha-
+    return ""
+
+
+def _pinned_image(image: str, full_sha: str) -> str:
+    """Полное имя образа с конкретным sha-тэгом, либо :latest fallback."""
+    if full_sha:
+        return f"{image}:sha-{full_sha}"
+    return f"{image}:latest"
+
+
 async def update_agents(db: AsyncSession) -> list[str]:
     """Обновить agent + browser образы всех running агентов (rolling restart)."""
     if settings.deployment_type != "k8s":
         return ["Update agents поддерживается только в K8s"]
 
     namespace = settings.k8s_namespace
-    agent_image = f"{AGENT_IMAGE}:latest"
-    browser_image = f"{BROWSER_IMAGE}:latest"
-
-    agent_sha, browser_sha = await asyncio.gather(
-        _get_latest_sha(AGENT_IMAGE),
-        _get_latest_sha(BROWSER_IMAGE),
+    agent_full, browser_full = await asyncio.gather(
+        _get_latest_full_sha(AGENT_IMAGE),
+        _get_latest_full_sha(BROWSER_IMAGE),
     )
+    agent_sha = agent_full[:7]
+    browser_sha = browser_full[:7]
+    # Пиним конкретный sha-тэг, чтобы исключить race с обновлением :latest
+    # на Docker Hub и кеши kubelet.
+    agent_image = _pinned_image(AGENT_IMAGE, agent_full)
+    browser_image = _pinned_image(BROWSER_IMAGE, browser_full)
 
     result = await db.execute(
         select(Agent).where(Agent.status == AgentStatus.RUNNING)
@@ -184,17 +209,18 @@ async def update_platform() -> list[str]:
 
     namespace = settings.k8s_namespace
 
-    shas: dict[str, str] = {}
+    full_shas: dict[str, str] = {}
     for name, image in [("orchestrator", ORCHESTRATOR_IMAGE), ("frontend", FRONTEND_IMAGE)]:
-        shas[name] = await _get_latest_sha(image)
+        full_shas[name] = await _get_latest_full_sha(image)
+    shas = {k: v[:7] for k, v in full_shas.items()}
 
     def _do_update() -> list[str]:
         _init_k8s()
         apps = client.AppsV1Api()
         updated: list[str] = []
         for dep_name, container, image in [
-            ("frontend", "frontend", f"{FRONTEND_IMAGE}:latest"),
-            ("orchestrator", "orchestrator", f"{ORCHESTRATOR_IMAGE}:latest"),
+            ("frontend", "frontend", _pinned_image(FRONTEND_IMAGE, full_shas.get("frontend", ""))),
+            ("orchestrator", "orchestrator", _pinned_image(ORCHESTRATOR_IMAGE, full_shas.get("orchestrator", ""))),
         ]:
             sha = shas.get(dep_name, "")
             try:

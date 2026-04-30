@@ -20,6 +20,7 @@ from .schemas import (
     AgentUpdate,
     AgentUsageBucket,
     AgentUsageResponse,
+    AgentVersionResponse,
     GlobalConfigResponse,
     GlobalConfigUpdate,
     UsageSnapshotItem,
@@ -174,6 +175,43 @@ async def delete_agent(
     success = await manager.delete_agent(agent_id, db)
     if not success:
         raise HTTPException(status_code=404, detail="Агент не найден")
+
+
+@router.get("/{agent_id}/version", response_model=AgentVersionResponse)
+async def get_agent_version(
+    agent_id: int,
+    db: AsyncSession = Depends(get_db),
+    _user: User = require_any,
+) -> AgentVersionResponse:
+    """Версия образов агента — short commit sha из k8s deployment annotation."""
+    agent = await db.get(Agent, agent_id)
+    if not agent:
+        raise HTTPException(status_code=404, detail="Агент не найден")
+    if settings.deployment_type != "k8s":
+        return AgentVersionResponse()
+    # Импорт локальный, чтобы избежать циклической зависимости (updates → agents).
+    from ..updates.manager import _init_k8s, ANNOTATION_SHA, ANNOTATION_BROWSER_SHA
+    import asyncio as _asyncio
+    from kubernetes import client as _k8s_client
+    from kubernetes.client.exceptions import ApiException as _ApiException
+
+    def _read() -> AgentVersionResponse:
+        _init_k8s()
+        apps = _k8s_client.AppsV1Api()
+        try:
+            dep = apps.read_namespaced_deployment(
+                name=f"agent-{agent.id}",
+                namespace=settings.k8s_namespace,
+            )
+        except _ApiException:
+            return AgentVersionResponse()
+        annotations = dep.spec.template.metadata.annotations or {}
+        return AgentVersionResponse(
+            image_sha=annotations.get(ANNOTATION_SHA) or None,
+            browser_sha=annotations.get(ANNOTATION_BROWSER_SHA) or None,
+        )
+
+    return await _asyncio.to_thread(_read)
 
 
 # --- Agent settings proxy ---

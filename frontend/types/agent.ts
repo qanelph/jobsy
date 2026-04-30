@@ -47,6 +47,11 @@ export interface AgentConfigField {
 
 export type AgentConfig = Record<string, AgentConfigField>
 
+export interface AgentVersion {
+  image_sha: string | null
+  browser_sha: string | null
+}
+
 // Telethon auth
 
 export type TelethonAuthPhase = 'idle' | 'qr_pending' | 'success' | 'error' | 'expired'
