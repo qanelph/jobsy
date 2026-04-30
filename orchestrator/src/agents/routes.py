@@ -196,14 +196,15 @@ async def get_agent_version(
     from kubernetes.client.exceptions import ApiException as _ApiException
 
     def _read() -> AgentVersionResponse:
-        _init_k8s()
-        apps = _k8s_client.AppsV1Api()
         try:
+            _init_k8s()
+            apps = _k8s_client.AppsV1Api()
             dep = apps.read_namespaced_deployment(
                 name=f"agent-{agent.id}",
                 namespace=settings.k8s_namespace,
             )
-        except _ApiException:
+        except Exception:
+            # ApiException, ConfigException, network errors — UI получит null'ы.
             return AgentVersionResponse()
         annotations = dep.spec.template.metadata.annotations or {}
         return AgentVersionResponse(

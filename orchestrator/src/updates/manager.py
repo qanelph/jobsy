@@ -151,6 +151,10 @@ async def update_agents(db: AsyncSession) -> list[str]:
         _get_latest_full_sha(AGENT_IMAGE),
         _get_latest_full_sha(BROWSER_IMAGE),
     )
+    if not agent_full:
+        logger.warning("update_agents: latest sha for %s not found, falling back to :latest", AGENT_IMAGE)
+    if not browser_full:
+        logger.warning("update_agents: latest sha for %s not found, falling back to :latest", BROWSER_IMAGE)
     agent_sha = agent_full[:7]
     browser_sha = browser_full[:7]
     # Пиним конкретный sha-тэг, чтобы исключить race с обновлением :latest
@@ -162,6 +166,16 @@ async def update_agents(db: AsyncSession) -> list[str]:
         select(Agent).where(Agent.status == AgentStatus.RUNNING)
     )
     agents = result.scalars().all()
+
+    annotations: dict[str, str] = {
+        "jobsy/restart-at": datetime.datetime.utcnow().isoformat(),
+    }
+    # Пустой sha означает что Docker Hub не вернул sha-тег — не перезатираем
+    # существующее значение, иначе check_all() решит что версия неизвестна.
+    if agent_sha:
+        annotations[ANNOTATION_SHA] = agent_sha
+    if browser_sha:
+        annotations[ANNOTATION_BROWSER_SHA] = browser_sha
 
     def _do_update() -> list[str]:
         _init_k8s()
@@ -177,11 +191,7 @@ async def update_agents(db: AsyncSession) -> list[str]:
                         "spec": {
                             "template": {
                                 "metadata": {
-                                    "annotations": {
-                                        "jobsy/restart-at": datetime.datetime.utcnow().isoformat(),
-                                        ANNOTATION_SHA: agent_sha,
-                                        ANNOTATION_BROWSER_SHA: browser_sha,
-                                    }
+                                    "annotations": annotations,
                                 },
                                 "spec": {
                                     "containers": [
@@ -223,6 +233,12 @@ async def update_platform() -> list[str]:
             ("orchestrator", "orchestrator", _pinned_image(ORCHESTRATOR_IMAGE, full_shas.get("orchestrator", ""))),
         ]:
             sha = shas.get(dep_name, "")
+            # Не перезатираем annotation пустотой если Docker Hub не вернул sha.
+            annotations: dict[str, str] = {
+                "jobsy/restart-at": datetime.datetime.utcnow().isoformat(),
+            }
+            if sha:
+                annotations[ANNOTATION_SHA] = sha
             try:
                 apps.patch_namespaced_deployment(
                     name=dep_name,
@@ -230,12 +246,7 @@ async def update_platform() -> list[str]:
                     body={
                         "spec": {
                             "template": {
-                                "metadata": {
-                                    "annotations": {
-                                        "jobsy/restart-at": datetime.datetime.utcnow().isoformat(),
-                                        ANNOTATION_SHA: sha,
-                                    }
-                                },
+                                "metadata": {"annotations": annotations},
                                 "spec": {
                                     "containers": [{"name": container, "image": image, "imagePullPolicy": "Always"}]
                                 },
