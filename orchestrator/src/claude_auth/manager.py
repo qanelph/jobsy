@@ -14,8 +14,9 @@ from ..config import settings
 
 logger = logging.getLogger(__name__)
 
-# Рефрешим за 30 минут до экспайра
-REFRESH_BUFFER_MS = 30 * 60 * 1000
+# Рефрешим за 2 часа до экспайра (access token живёт 8 часов).
+# Агентам refresh_token не выдаём, поэтому единственный, кто рефрешит, — оркестратор.
+REFRESH_BUFFER_MS = 2 * 60 * 60 * 1000
 
 # Lock для защиты от параллельных refresh (refresh_token одноразовый)
 _refresh_lock = asyncio.Lock()
