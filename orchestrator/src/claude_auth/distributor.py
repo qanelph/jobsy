@@ -29,11 +29,14 @@ class CredentialDistributor:
         """Формирует содержимое .credentials.json для записи в контейнер.
 
         Claude Code ожидает обёртку claudeAiOauth вокруг токенов.
+
+        refresh_token намеренно не отдаём: он одноразовый, и если Claude CLI внутри
+        агента сам его использует, токен сгорает для оркестратора и остальных агентов.
+        Рефрешит только оркестратор и раздаёт свежий access_token всем.
         """
         return {
             "claudeAiOauth": {
                 "accessToken": credential.access_token,
-                "refreshToken": credential.refresh_token,
                 "expiresAt": credential.expires_at,
                 "scopes": [
                     "user:profile",

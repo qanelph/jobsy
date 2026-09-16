@@ -6,7 +6,7 @@ from .manager import ClaudeAuthManager
 
 logger = logging.getLogger(__name__)
 
-REFRESH_INTERVAL_SECONDS = 30 * 60  # 30 минут
+REFRESH_INTERVAL_SECONDS = 5 * 60  # 5 минут — чтобы успеть до того, как истечёт буфер в manager
 
 
 async def token_refresh_loop() -> None:

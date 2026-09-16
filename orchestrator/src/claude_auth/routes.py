@@ -46,6 +46,8 @@ async def oauth_callback(
         return await _manager.complete_oauth_flow(body.code, body.state, db)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except httpx.HTTPError as e:
+        raise HTTPException(status_code=502, detail=f"Anthropic OAuth недоступен через прокси: {e}")
 
 
 @router.post("/apikey", response_model=ClaudeAuthStatusResponse)
